@@ -1,20 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#6f35ff"/>
-      <stop offset=".55" stop-color="#171027"/>
-      <stop offset="1" stop-color="#05030b"/>
-    </radialGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#fff0a6"/>
-      <stop offset=".45" stop-color="#ffd166"/>
-      <stop offset="1" stop-color="#d58c24"/>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd166"/>
+      <stop offset="0.45" stop-color="#b85cff"/>
+      <stop offset="1" stop-color="#090514"/>
     </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
-  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <path d="M253 402c-62-45-122-91-122-166 0-50 36-89 83-89 26 0 49 13 63 35 14-22 37-35 63-35 47 0 83 39 83 89 0 75-61 121-123 166-16 12-32 12-47 0z" fill="none" stroke="url(#gold)" stroke-width="18" opacity=".96"/>
-  <circle cx="220" cy="194" r="20" fill="url(#gold)"/>
-  <path d="M221 218c31 20 49 48 59 87 5 20-8 35-28 31-22-5-39-17-50-35-8 27-22 52-44 73" fill="none" stroke="#ffd166" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M284 239c21-3 39-16 54-38" fill="none" stroke="#ffd166" stroke-width="18" stroke-linecap="round"/>
-  <text x="256" y="450" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="800" fill="#ffd166" letter-spacing="4">KIZ</text>
+  <rect width="512" height="512" rx="120" fill="#090514"/>
+  <circle cx="256" cy="256" r="204" fill="url(#g)" opacity=".24"/>
+  <path d="M150 354 C120 265 155 158 255 128 C355 158 392 265 362 354" fill="none" stroke="#ffd166" stroke-width="24" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M198 314 C224 278 223 224 201 188 L247 188 C264 222 268 270 238 314 Z" fill="#fff8e8"/>
+  <path d="M282 188 L325 188 L288 248 L333 314 L286 314 L253 262 Z" fill="#ffd166"/>
+  <text x="256" y="405" text-anchor="middle" font-size="72" font-family="Arial, sans-serif" font-weight="800" fill="#fff8e8">KIZ</text>
 </svg>

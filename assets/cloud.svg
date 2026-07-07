@@ -1,11 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 360">
   <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff5dc8"/><stop offset=".55" stop-color="#8b4cff"/><stop offset="1" stop-color="#ffd166"/></linearGradient>
     <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffd166"/><stop offset=".45" stop-color="#b85cff"/><stop offset="1" stop-color="#7c3cff"/></linearGradient>
   </defs>
-  <g fill="none" stroke="url(#g)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
-    <path d="M105 213h200c43 0 78-31 78-72 0-38-30-68-69-72C297 31 261 9 220 15c-42 6-73 35-83 73-10-5-22-8-35-8-42 0-76 33-76 73 0 35 26 60 79 60z"/>
-    <path d="M210 218V104"/>
-    <path d="M166 148l44-44 44 44"/>
-  </g>
+  <rect width="500" height="360" rx="55" fill="#0b0614" opacity="0"/>
+  <path d="M138 236c-54 0-89-33-89-78 0-43 32-75 75-78 15-49 57-75 111-65 33-52 119-34 135 30 47 9 81 45 81 91 0 56-43 100-101 100H138Z" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M250 207V116" stroke="#ffd166" stroke-width="18" stroke-linecap="round"/>
+  <path d="M206 157l44-44 44 44" fill="none" stroke="#ffd166" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

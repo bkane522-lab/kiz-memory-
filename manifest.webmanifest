@@ -1,10 +1,10 @@
 {
   "name": "Kiz Memory",
   "short_name": "Kiz Memory",
-  "description": "Transformez vos soirées et workshops Kizomba en montages verticaux prêts pour les réseaux sociaux.",
+  "description": "Montage vertical IA pour soirées et workshops Kizomba.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#07040f",
+  "background_color": "#05020b",
   "theme_color": "#090514",
   "orientation": "portrait",
   "icons": [

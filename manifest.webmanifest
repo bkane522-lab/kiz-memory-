@@ -1,18 +1,14 @@
 {
   "name": "Kiz Memory",
   "short_name": "Kiz Memory",
-  "description": "L’app qui transforme vos soirées et workshops Kizomba en montages verticaux prêts à partager.",
+  "description": "Récaps verticaux IA pour soirées et workshops Kizomba.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#05030b",
-  "theme_color": "#05030b",
+  "background_color": "#07030e",
+  "theme_color": "#06030d",
   "orientation": "portrait",
   "icons": [
-    {
-      "src": "assets/icon.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "assets/icon.svg", "sizes": "192x192", "type": "image/svg+xml" },
+    { "src": "assets/icon.svg", "sizes": "512x512", "type": "image/svg+xml" }
   ]
 }

@@ -1,38 +1,29 @@
-# Kiz Memory — Template respecté
+# Kiz Memory — Template interactif
 
-Prototype fidèle à la direction visuelle validée : dark premium, violet, or royal, écrans verticaux réseaux sociaux.
+Version corrigée du prototype Kiz Memory, fidèle à la direction visuelle vendue : violet/or, écrans premium, capture intelligente, import, analyse IA, timeline, vibe score, workshop brain, studio de récap, export et partage.
 
-## Fichiers
+## Ce qui fonctionne dans cette version
 
-- `index.html`
-- `style.css`
-- `app.js`
-- `manifest.webmanifest`
-- `assets/icon.svg`
-- `assets/dance-scene.svg`
-- `assets/brain.svg`
-- `assets/cloud.svg`
+- Navigation entre les écrans.
+- Bouton créer une Memory.
+- Capture caméra via navigateur si autorisée.
+- Enregistrement vidéo via MediaRecorder si supporté.
+- Bouton flash/torche avec détection de compatibilité.
+- Import vidéo depuis la galerie.
+- Analyse IA simulée avec progression.
+- Timeline magique animée.
+- Vibe Score.
+- Workshop Brain.
+- Choix de format.
+- Choix de style.
+- Sélection/retrait des clips.
+- Personnalisation titre/date/lieu.
+- Partage via Web Share API si disponible.
+- WhatsApp via lien de partage.
+- Téléchargement d’une fiche récap JSON.
 
-## Écrans inclus
+## Limites honnêtes
 
-1. Accueil premium
-2. Capture intelligente
-3. Importer
-4. Analyse IA
-5. Timeline magique
-6. Vibe Score
-7. Workshop Brain
-8. Studio de recap
-9. Aperçu du montage
-10. Style du montage
-11. Moments sélectionnés
-12. Personnalisation
-13. Export & partage
-14. Galerie souvenirs
-15. Memory Capsule
-16. Confidentialité
-17. Paramètres
+Le vrai partage direct vers Instagram/TikTok avec fichier vidéo n’est pas totalement contrôlable depuis une PWA navigateur. Le navigateur peut ouvrir la feuille de partage Android via `navigator.share`, ou ouvrir Instagram/TikTok, mais l’utilisateur devra souvent sélectionner le fichier manuellement.
 
-## Note
-
-Cette version est un prototype front-end. La vraie génération vidéo demandera ensuite un moteur de montage vidéo et une analyse IA réelle.
+Le vrai montage MP4 final nécessite ensuite un moteur vidéo : FFmpeg côté serveur, FFmpeg WASM, ou une API vidéo dédiée.

@@ -1,0 +1,17 @@
+{
+  "name": "Kiz Memory",
+  "short_name": "KizMemory",
+  "description": "Prototype d'application de montage vertical automatique pour soirées et workshops Kizomba.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#07040f",
+  "theme_color": "#090514",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

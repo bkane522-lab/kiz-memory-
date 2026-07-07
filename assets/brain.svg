@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="55%">
+      <stop offset="0" stop-color="#ffd166" stop-opacity=".9"/>
+      <stop offset=".38" stop-color="#9e48ff" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#05030b" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="b"><feGaussianBlur stdDeviation="8"/></filter>
+    <linearGradient id="g" x1="0" x2="1"><stop stop-color="#ffd166"/><stop offset=".5" stop-color="#b85cff"/><stop offset="1" stop-color="#7c3cff"/></linearGradient>
+  </defs>
+  <rect width="520" height="360" fill="none"/>
+  <ellipse cx="260" cy="185" rx="220" ry="130" fill="url(#glow)" filter="url(#b)" opacity=".85"/>
+  <g fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M154 223c-48-6-75-33-75-74 0-39 31-69 71-69 10-43 48-73 95-73 42 0 73 22 90 55 44-8 86 20 96 62 42 8 70 38 70 78 0 48-39 83-91 83H168c-31 0-55-18-55-44 0-11 5-21 13-29"/>
+    <path d="M168 150c44-28 89-22 122 17"/>
+    <path d="M244 78c5 45-14 84-49 116"/>
+    <path d="M335 63c-10 45 5 88 42 129"/>
+    <path d="M314 156c-44 20-66 58-59 111"/>
+    <path d="M392 135c-35 15-55 43-60 83"/>
+    <path d="M168 220c36-9 66 1 93 30"/>
+  </g>
+  <text x="260" y="206" text-anchor="middle" font-family="Arial" font-size="70" font-weight="800" fill="#ffd166">IA</text>
+</svg>

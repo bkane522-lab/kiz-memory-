@@ -3,339 +3,301 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Kiz Memory — Reels IA</title>
-  <meta name="description" content="Kiz Memory transforme vos soirées et workshops Kizomba en montages verticaux prêts pour les réseaux sociaux." />
-  <meta name="theme-color" content="#05020b" />
+  <title>Kiz Memory — IA Reels Kizomba</title>
+  <meta name="description" content="Kiz Memory filme ou importe vos soirées et workshops Kizomba, puis génère un montage vertical prêt pour les réseaux sociaux." />
+  <meta name="theme-color" content="#05030b" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.svg" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="stars"></div>
+  <div class="app-shell">
+    <div class="stars"></div>
+    <main class="phone" aria-label="Prototype Kiz Memory">
+      <div class="status"><span>9:41</span><span>● ● ●</span></div>
 
-  <main class="app-shell">
-    <div class="phone-status">
-      <strong>9:41</strong>
-      <span>● ● ●</span>
-    </div>
+      <!-- 1 ACCUEIL -->
+      <section class="screen active" id="home">
+        <header class="screen-head home-head">
+          <button class="ghost crown">♛</button>
+          <button class="ghost" data-nav="settings">♢</button>
+        </header>
 
-    <section class="screen active" id="home">
-      <header class="header clean">
-        <button class="glass-btn" data-go="menu" aria-label="Menu">☰</button>
-        <button class="gold-pill">👑 Vertical IA</button>
-      </header>
-
-      <div class="hero-card dance-scene">
-        <div class="scene-lights"></div>
-        <div class="couple couple-large"></div>
-        <div class="hero-copy">
-          <p class="tiny">KIZ MEMORY</p>
-          <h1>Créez vos<br><span>souvenirs dansés</span></h1>
-          <p>Filmez. L’IA sélectionne. Vous revivez l’essentiel.</p>
+        <div class="hero-scene">
+          <img src="assets/dance-scene.svg" alt="Couple de danse en soirée Kizomba" />
+          <div class="logo-block">
+            <div class="brand-big">KIZ</div>
+            <div class="brand-small">MEMORY</div>
+          </div>
+          <div class="hero-copy">
+            <h1>Créez vos <span>souvenirs dansés</span></h1>
+            <p>Filmez. L’IA sélectionne. Vous revivez l’essentiel.</p>
+          </div>
         </div>
-      </div>
 
-      <button class="primary big" data-go="create">✨ Créer une Memory</button>
-
-      <div class="split-title">
-        <h2>Vos dernières Memories</h2>
-        <button data-go="gallery">Voir tout</button>
-      </div>
-
-      <div class="memory-strip">
-        <article class="mini-memory" data-go="timeline">
-          <div class="thumb purple"><div class="couple small"></div></div>
-          <b>Soirée Lisboa</b>
-          <small>00:30</small>
-        </article>
-        <article class="mini-memory" data-go="workshop">
-          <div class="thumb amber"><div class="couple small"></div></div>
-          <b>Workshop Urban</b>
-          <small>00:45</small>
-        </article>
-        <article class="mini-memory" data-go="studio">
-          <div class="thumb cyan"><div class="couple small"></div></div>
-          <b>Freestyle</b>
-          <small>00:15</small>
-        </article>
-      </div>
-    </section>
-
-    <section class="screen" id="create">
-      <header class="header">
-        <button class="glass-btn" data-go="home">‹</button>
-        <h2>Créer une Memory</h2>
-        <button class="glass-btn" data-go="privacy">🛡</button>
-      </header>
-
-      <button class="capture-card dance-scene" data-go="capture">
-        <span class="mode-badge">⚡ IA ACTIVÉE</span>
-        <div class="frame-corners"></div>
-        <div class="couple couple-large"></div>
-        <strong>Capture intelligente</strong>
-        <small>Filmer une soirée, un workshop ou un freestyle.</small>
-      </button>
-
-      <label class="upload-card">
-        <input type="file" id="videoInput" accept="video/*" hidden>
-        <div class="cloud">☁</div>
-        <h3>Importer une vidéo</h3>
-        <p>MP4, MOV · montage vertical 9:16</p>
-      </label>
-
-      <div class="selected-video hidden" id="selectedVideo">
-        <video id="sourceVideo" muted playsinline controls></video>
-        <div>
-          <b id="fileName">Vidéo sélectionnée</b>
-          <small id="fileInfo">Prête pour analyse IA</small>
+        <div class="section-row"><b>VOS DERNIÈRES MEMORIES</b><button data-nav="gallery">Voir tout</button></div>
+        <div class="memory-row">
+          <button class="memory-card" data-nav="preview"><span class="thumb"></span><b>Soirée Lisboa Kizomba</b><small>01:12</small></button>
+          <button class="memory-card" data-nav="workshop"><span class="thumb thumb2"></span><b>Workshop Urban Kiz</b><small>00:58</small></button>
+          <button class="memory-card" data-nav="preview"><span class="thumb thumb3"></span><b>Freestyle Session</b><small>00:47</small></button>
         </div>
-      </div>
 
-      <div class="mode-grid">
-        <button class="active">👥 Soirée</button>
-        <button>🎓 Workshop</button>
-        <button>∞ Freestyle</button>
-      </div>
+        <button class="gold-btn main-cta" data-nav="capture">✦ Créer une Memory</button>
+      </section>
 
-      <button class="primary disabled" id="analyzeBtn" disabled>Analyser avec l’IA</button>
-    </section>
+      <!-- 2 CAPTURE INTELLIGENTE -->
+      <section class="screen" id="capture">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="home">×</button>
+          <h2>Capture intelligente</h2>
+          <button class="ghost">ϟ</button>
+        </header>
 
-    <section class="screen" id="capture">
-      <header class="header floating">
-        <button class="glass-btn" data-go="create">×</button>
-        <h2>Capture intelligente</h2>
-        <button class="glass-btn">⚡</button>
-      </header>
-
-      <div class="camera-view dance-scene">
-        <div class="frame-corners"></div>
-        <span class="mode-badge">⚡ IA ACTIVÉE</span>
-        <div class="couple couple-large"></div>
-        <button class="zoom">1.0x</button>
-      </div>
-
-      <div class="capture-modes">
-        <button class="active">👥<span>Soirée</span></button>
-        <button>🎓<span>Workshop</span></button>
-        <button>∞<span>Freestyle</span></button>
-      </div>
-
-      <button class="record" id="recordBtn"><span></span></button>
-      <p class="hint">Démo prototype : un appui lance l’analyse simulée.</p>
-    </section>
-
-    <section class="screen" id="analysis">
-      <header class="header">
-        <button class="glass-btn" data-go="create">‹</button>
-        <h2>Analyse IA en cours</h2>
-        <button class="glass-btn">?</button>
-      </header>
-
-      <div class="brain">
-        <div class="brain-lines"></div>
-        <strong>IA</strong>
-      </div>
-
-      <p class="center-text">Kiz Memory analyse votre vidéo<br>pour trouver les meilleurs moments.</p>
-
-      <div class="analysis-list">
-        <article>
-          <span>🕺</span>
-          <div><b>Mouvement</b><small>Détection des mouvements clés</small><i><em id="a1"></em></i></div>
-          <strong id="p1">0%</strong>
-        </article>
-        <article>
-          <span>💜</span>
-          <div><b>Ambiance</b><small>Analyse de l’ambiance et du lieu</small><i><em id="a2"></em></i></div>
-          <strong id="p2">0%</strong>
-        </article>
-        <article>
-          <span>⚡</span>
-          <div><b>Énergie</b><small>Mesure de l’énergie collective</small><i><em id="a3"></em></i></div>
-          <strong id="p3">0%</strong>
-        </article>
-        <article>
-          <span>⭐</span>
-          <div><b>Moments forts</b><small>Sélection des temps forts</small><i><em id="a4"></em></i></div>
-          <strong id="p4">0%</strong>
-        </article>
-      </div>
-
-      <button class="secondary" id="skipAnalysis">Voir les résultats</button>
-    </section>
-
-    <section class="screen" id="timeline">
-      <header class="header">
-        <button class="glass-btn" data-go="analysis">‹</button>
-        <h2>Timeline magique</h2>
-        <button class="glass-btn">☷</button>
-      </header>
-
-      <div class="event-head">
-        <div class="thumb purple"><div class="couple small"></div></div>
-        <div><b>Soirée Lisboa Kizomba</b><small>18 mai 2026 · 1:24:35</small></div>
-      </div>
-
-      <div class="wave-panel">
-        <div class="timeline-tags">
-          <span>🔥 Danse intense</span>
-          <span>👏 Applaudissements</span>
-          <span>👑 Démo prof</span>
+        <div class="camera-frame">
+          <img src="assets/dance-scene.svg" alt="Capture intelligente" />
+          <span class="ai-pill">⚡ IA ACTIVÉE</span>
+          <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+          <button class="zoom">1.0x</button>
+          <button class="mini-tool">⌘</button>
+          <button class="mini-tool second">✦</button>
         </div>
-        <div class="wave-bars" id="waveBars"></div>
-        <div class="time-row"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:24</span></div>
-      </div>
 
-      <div class="split-title">
-        <h2>Moments sélectionnés</h2>
-        <button data-go="studio">Studio</button>
-      </div>
-      <div class="clip-row" id="clipRow"></div>
-
-      <button class="primary" data-go="vibe">Voir le Vibe Score</button>
-    </section>
-
-    <section class="screen" id="vibe">
-      <header class="header">
-        <button class="glass-btn" data-go="timeline">‹</button>
-        <h2>Vibe Score</h2>
-        <button class="glass-btn">↗</button>
-      </header>
-
-      <div class="score-ring">
-        <svg viewBox="0 0 160 160">
-          <circle cx="80" cy="80" r="68" class="ring-bg"></circle>
-          <circle cx="80" cy="80" r="68" class="ring-main"></circle>
-        </svg>
-        <strong>92</strong>
-        <small>VIBE EXCEPTIONNELLE</small>
-        <span>★★★★★</span>
-      </div>
-
-      <div class="score-list">
-        <article><b>⚡ Énergie</b><i><em style="width:94%"></em></i><span>94/100</span></article>
-        <article><b>🕺 Mouvement</b><i><em style="width:91%"></em></i><span>91/100</span></article>
-        <article><b>💜 Ambiance</b><i><em style="width:93%"></em></i><span>93/100</span></article>
-        <article><b>👥 Social</b><i><em style="width:88%"></em></i><span>88/100</span></article>
-      </div>
-
-      <div class="quote-card">👑 Une soirée mémorable !<br><small>L’énergie était au rendez-vous et la connexion incroyable.</small></div>
-      <button class="primary" data-go="workshop">Workshop Brain</button>
-    </section>
-
-    <section class="screen" id="workshop">
-      <header class="header">
-        <button class="glass-btn" data-go="vibe">‹</button>
-        <h2>Workshop Brain</h2>
-        <button class="glass-btn">i</button>
-      </header>
-
-      <div class="mini-brain">🧠</div>
-      <p class="center-text">L’IA a identifié les séquences clés<br>de votre workshop.</p>
-
-      <div class="workshop-list">
-        <button><span>🎓</span><b>Explication prof</b><small>8 clips · 02:45</small><em>›</em></button>
-        <button><span>👑</span><b>Démonstration</b><small>6 clips · 01:58</small><em>›</em></button>
-        <button><span>👥</span><b>Pratique élèves</b><small>12 clips · 03:42</small><em>›</em></button>
-        <button><span>✓</span><b>Correction</b><small>5 clips · 01:36</small><em>›</em></button>
-      </div>
-
-      <button class="primary" data-go="studio">Voir la recap du workshop</button>
-    </section>
-
-    <section class="screen" id="studio">
-      <header class="header">
-        <button class="glass-btn" data-go="workshop">‹</button>
-        <h2>Studio de recap</h2>
-        <button class="gold-icon">👑</button>
-      </header>
-
-      <h3 class="section-head">Choisissez votre format</h3>
-      <div class="format-list">
-        <button data-duration="15"><span class="format-thumb story"></span><b>Story 15s</b><small>Rapide & impactant</small><em>9:16</em></button>
-        <button class="active" data-duration="30"><span class="format-thumb reel"></span><b>Reel 30s</b><small>Dynamique & rythmé</small><em>9:16</em></button>
-        <button data-duration="60"><span class="format-thumb movie"></span><b>Aftermovie 60s</b><small>Immersif & émotionnel</small><em>16:9</em></button>
-        <button data-duration="90"><span class="format-thumb full"></span><b>Souvenir complet</b><small>La vidéo complète</small><em>16:9</em></button>
-      </div>
-
-      <button class="primary" data-go="export">Générer la Memory ✨</button>
-
-      <div class="share-row">
-        <button>↗<span>Partager</span></button>
-        <button>◎<span>Instagram</span></button>
-        <button>☘<span>WhatsApp</span></button>
-        <button>…<span>Plus</span></button>
-      </div>
-    </section>
-
-    <section class="screen" id="export">
-      <header class="header">
-        <button class="glass-btn" data-go="studio">‹</button>
-        <h2>Memory prête</h2>
-        <button class="gold-icon">✨</button>
-      </header>
-
-      <div class="vertical-preview dance-scene">
-        <div class="scene-lights"></div>
-        <div class="couple couple-large"></div>
-        <button class="play">▶</button>
-        <div class="video-label">
-          <b>KIZOMBA NIGHT</b>
-          <span id="exportMeta">Reel 9:16 · 30s</span>
+        <div class="mode-grid">
+          <button class="mode active"><span>👥</span><b>Soirée</b></button>
+          <button class="mode"><span>🎓</span><b>Workshop</b></button>
+          <button class="mode"><span>∞</span><b>Freestyle</b></button>
         </div>
-      </div>
 
-      <button class="primary" id="downloadCard">Télécharger la fiche de montage</button>
-      <button class="secondary" data-go="gallery">Ouvrir la galerie</button>
-    </section>
+        <div class="capture-tools">
+          <button class="round" data-nav="import">▧</button>
+          <button class="record" data-nav="analysis"><i></i></button>
+          <div class="timer"><span></span>00:00:12</div>
+        </div>
+      </section>
 
-    <section class="screen" id="gallery">
-      <header class="header">
-        <button class="glass-btn" data-go="home">‹</button>
-        <h2>Mes souvenirs</h2>
-        <button class="glass-btn">☷</button>
-      </header>
-      <div class="gallery-grid">
-        <article><div class="thumb purple"><div class="couple small"></div></div><b>Soirée Lisboa</b><small>00:30</small></article>
-        <article><div class="thumb amber"><div class="couple small"></div></div><b>Workshop Urban</b><small>00:45</small></article>
-        <article><div class="thumb cyan"><div class="couple small"></div></div><b>Freestyle Session</b><small>00:15</small></article>
-        <article><div class="thumb pink"><div class="couple small"></div></div><b>Golden Night</b><small>01:00</small></article>
-      </div>
-    </section>
+      <!-- 3 IMPORTER -->
+      <section class="screen" id="import">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="capture">‹</button>
+          <h2>Importer</h2>
+          <button class="ghost">?</button>
+        </header>
 
-    <section class="screen" id="privacy">
-      <header class="header">
-        <button class="glass-btn" data-go="create">‹</button>
-        <h2>Confidentialité</h2>
-        <button class="glass-btn">i</button>
-      </header>
-      <div class="privacy-card">
-        <div class="shield-big">🛡</div>
-        <h3>Partager en confiance</h3>
-        <label>Flouter les visages <input type="checkbox" checked></label>
-        <label>Retirer les passages sensibles <input type="checkbox" checked></label>
-        <label>Validation avant partage <input type="checkbox" checked></label>
-      </div>
-    </section>
+        <label class="upload-zone">
+          <input id="videoFile" type="file" accept="video/*" hidden />
+          <img src="assets/cloud.svg" alt="Importer" />
+          <b>Glissez votre vidéo ici</b>
+          <span>ou importez depuis votre galerie</span>
+          <small>MP4, MOV · Max 10Go · 4K supporté</small>
+        </label>
 
-    <section class="screen" id="menu">
-      <header class="header">
-        <button class="glass-btn" data-go="home">‹</button>
-        <h2>Paramètres</h2>
-        <span></span>
-      </header>
-      <div class="settings-list">
-        <button>Compte <span>›</span></button>
-        <button>Abonnement <span>›</span></button>
-        <button>Qualité export <small>1080 × 1920</small></button>
-        <button>Stockage <span>›</span></button>
-        <button>Langue <small>Français</small></button>
-        <button>À propos <span>›</span></button>
-        <button class="danger">Se déconnecter</button>
-      </div>
-    </section>
-  </main>
+        <div class="divider"><span></span>OU<span></span></div>
 
+        <button class="file-card" id="sampleFile">
+          <span class="clip-preview"></span>
+          <span><b id="fileLabel">VID_2024_05_18.mp4</b><small id="fileMeta">1:24:35 · 2,3 Go</small></span>
+          <i>›</i>
+        </button>
+
+        <button class="gold-btn" id="importBtn">▣ Importer une vidéo</button>
+        <p class="secure-note">▱ Importation sécurisée et privée</p>
+      </section>
+
+      <!-- 4 ANALYSE IA -->
+      <section class="screen" id="analysis">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="import">‹</button>
+          <h2>Analyse IA en cours</h2>
+          <span></span>
+        </header>
+
+        <div class="brain-wrap"><img src="assets/brain.svg" alt="Analyse IA" /></div>
+        <p class="analysis-copy">Kiz Memory analyse votre vidéo<br>pour trouver les meilleurs moments.</p>
+
+        <div class="metric-list">
+          <div class="metric"><span>🕺</span><div><b>Mouvement</b><small>Détection des mouvements clés</small><em><i style="width:85%"></i></em></div><strong>85%</strong></div>
+          <div class="metric"><span>♡</span><div><b>Ambiance</b><small>Analyse de l’ambiance et du lieu</small><em><i style="width:72%"></i></em></div><strong>72%</strong></div>
+          <div class="metric"><span>ϟ</span><div><b>Énergie</b><small>Mesure de l’énergie collective</small><em><i style="width:64%"></i></em></div><strong>64%</strong></div>
+          <div class="metric"><span>☆</span><div><b>Moments forts</b><small>Sélection des temps forts</small><em><i style="width:40%"></i></em></div><strong>40%</strong></div>
+        </div>
+
+        <p class="secure-note">Analyse en cours... ne fermez pas l’app.</p>
+        <div class="sound-wave tiny"></div>
+        <button class="ghost-skip" data-nav="timeline">Voir les résultats</button>
+      </section>
+
+      <!-- 5 TIMELINE MAGIQUE -->
+      <section class="screen" id="timeline">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="analysis">‹</button>
+          <h2>Timeline magique</h2>
+          <button class="ghost">☷</button>
+        </header>
+
+        <div class="event-mini"><span class="mini-img"></span><div><b>Soirée Lisboa Kizomba</b><small>18 MAI 2024 · 1:24:35</small></div></div>
+
+        <div class="wave-card">
+          <div class="wave-tags"><span>🔥 Danse intense</span><span>👏 Applaudissements</span><span>👑 Démo prof</span></div>
+          <div class="big-wave" id="bigWave"></div>
+          <div class="time-row"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:24</span></div>
+        </div>
+
+        <div class="section-row"><b>Moments sélectionnés (12)</b></div>
+        <div class="clip-strip" id="clipStrip"></div>
+        <button class="gold-btn" data-nav="score">▶ Aperçu de la Memory</button>
+      </section>
+
+      <!-- 6 VIBE SCORE -->
+      <section class="screen" id="score">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="timeline">‹</button>
+          <h2>Vibe Score</h2>
+          <button class="ghost">↗</button>
+        </header>
+
+        <div class="score-ring"><svg viewBox="0 0 220 220"><circle cx="110" cy="110" r="96"></circle><circle class="gold-arc" cx="110" cy="110" r="96"></circle><circle class="violet-arc" cx="110" cy="110" r="96"></circle></svg><div><strong>92</strong><span>VIBE EXCEPTIONNELLE</span><small>★★★★★</small></div></div>
+
+        <div class="score-list">
+          <div><span>ϟ Énergie</span><b>94/100</b><em><i style="width:94%"></i></em></div>
+          <div><span>🕺 Mouvement</span><b>91/100</b><em><i style="width:91%"></i></em></div>
+          <div><span>♡ Ambiance</span><b>93/100</b><em><i style="width:93%"></i></em></div>
+          <div><span>👥 Social</span><b>88/100</b><em><i style="width:88%"></i></em></div>
+        </div>
+
+        <div class="message-card"><span>♛</span><div><b>Une soirée mémorable !</b><small>L’énergie était au rendez-vous et la connexion incroyable.</small></div></div>
+        <button class="gold-btn" data-nav="workshop">Continuer</button>
+      </section>
+
+      <!-- 7 WORKSHOP BRAIN -->
+      <section class="screen" id="workshop">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="score">‹</button>
+          <h2>Workshop Brain</h2>
+          <button class="ghost">i</button>
+        </header>
+
+        <div class="brain-small"><img src="assets/brain.svg" alt="Workshop Brain" /></div>
+        <p class="analysis-copy">L’IA a identifié les séquences clés<br>de votre workshop.</p>
+
+        <div class="work-list">
+          <button><span>🎓</span><b>Explication prof</b><small>8 clips · 02:45</small><i>›</i></button>
+          <button><span>♛</span><b>Démonstration</b><small>6 clips · 01:58</small><i>›</i></button>
+          <button><span>👥</span><b>Pratique élèves</b><small>12 clips · 03:42</small><i>›</i></button>
+          <button><span>☑</span><b>Correction</b><small>5 clips · 01:36</small><i>›</i></button>
+        </div>
+        <button class="gold-btn" data-nav="studio">✦ Voir la recap du workshop</button>
+      </section>
+
+      <!-- 8 STUDIO DE RECAP -->
+      <section class="screen" id="studio">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="workshop">‹</button>
+          <h2>Studio de recap</h2>
+          <button class="ghost crown">♛</button>
+        </header>
+
+        <h3 class="screen-subtitle">Choisissez votre format</h3>
+        <div class="format-stack">
+          <button class="selected" data-duration="15"><span class="format-thumb"></span><div><b>Story 15s</b><small>Rapide & impactant</small></div><i>✓<small>9:16</small></i></button>
+          <button data-duration="30"><span class="format-thumb f2"></span><div><b>Reel 30s</b><small>Dynamique & rythmée</small></div><i>○<small>9:16</small></i></button>
+          <button data-duration="60"><span class="format-thumb f3"></span><div><b>Aftermovie 60s</b><small>Immersif & émotionnel</small></div><i>□<small>16:9</small></i></button>
+          <button data-duration="180"><span class="format-thumb f4"></span><div><b>Souvenir complet</b><small>La vidéo complète</small></div><i>□<small>16:9</small></i></button>
+        </div>
+        <button class="gold-btn" data-nav="preview">Générer la Memory ✨</button>
+        <div class="share-icons"><button>↗<small>Partager</small></button><button>◎<small>Instagram</small></button><button>◉<small>WhatsApp</small></button><button>•••<small>Plus</small></button></div>
+      </section>
+
+      <!-- 9 APERÇU DU MONTAGE -->
+      <section class="screen" id="preview">
+        <header class="screen-head title-head">
+          <button class="ghost" data-nav="studio">‹</button>
+          <h2>Aperçu du montage</h2>
+          <button class="ghost" data-nav="style">Style</button>
+        </header>
+        <div class="vertical-preview"><img src="assets/dance-scene.svg" alt="Aperçu vertical" /><div><button>▶</button><b>KIZOMBA NIGHT</b><small>12 JUILLET 2024 · PARIS</small></div></div>
+        <div class="player-bar"><span>0:30</span><input type="range" min="0" max="100" value="72"><span>0:30</span></div>
+        <button class="gold-btn" data-nav="style">Choisir le style</button>
+      </section>
+
+      <!-- 10 STYLE -->
+      <section class="screen" id="style">
+        <header class="screen-head title-head"><button class="ghost" data-nav="preview">‹</button><h2>Style du montage</h2><button class="ghost" data-nav="moments">›</button></header>
+        <h3 class="screen-subtitle">Choisissez un style</h3>
+        <div class="style-stack">
+          <button class="selected"><span class="style-thumb gold"></span><b>Golden Night</b><small>Élégant, premium, lumineux</small><i>✓</i></button>
+          <button><span class="style-thumb purple"></span><b>Urban Kiz</b><small>Violet, néon, moderne</small><i>○</i></button>
+          <button><span class="style-thumb clean"></span><b>Workshop Clean</b><small>Lisible, clair, pédagogique</small><i>○</i></button>
+          <button><span class="style-thumb pink"></span><b>Elegant Recap</b><small>Doux, émotionnel</small><i>○</i></button>
+          <button><span class="style-thumb party"></span><b>Party Energy</b><small>Rapide, dynamique</small><i>○</i></button>
+        </div>
+        <button class="gold-btn" data-nav="moments">Continuer</button>
+      </section>
+
+      <!-- 11 MOMENTS -->
+      <section class="screen" id="moments">
+        <header class="screen-head title-head"><button class="ghost" data-nav="style">‹</button><h2>Moments sélectionnés</h2><button class="ghost" data-nav="personalize">›</button></header>
+        <div class="info-box"><b>12 moments</b><span>Durée : 30 sec</span><small>Retirez les clips que vous ne voulez pas garder.</small></div>
+        <div class="edit-grid" id="editGrid"></div>
+        <button class="gold-btn" data-nav="personalize">Modifier</button>
+      </section>
+
+      <!-- 12 PERSONNALISATION -->
+      <section class="screen" id="personalize">
+        <header class="screen-head title-head"><button class="ghost" data-nav="moments">‹</button><h2>Personnalisation</h2><button class="ghost" data-nav="export">›</button></header>
+        <div class="form-card">
+          <label>Titre<input value="Kizomba Night" id="titleInput"></label>
+          <label>Date<input value="12 juillet 2024" id="dateInput"></label>
+          <label>Lieu<input value="Paris, France" id="placeInput"></label>
+          <label class="switch">Ajouter un logo<input type="checkbox" checked><span></span></label>
+          <label class="switch">Sous-titres auto<input type="checkbox"><span></span></label>
+        </div>
+        <div class="cover-card"><small>KIZ MEMORY</small><b id="coverTitle">Kizomba Night</b><span id="coverMeta">12 juillet 2024 · Paris, France</span></div>
+        <button class="gold-btn" data-nav="export">Créer l’export</button>
+      </section>
+
+      <!-- 13 EXPORT -->
+      <section class="screen" id="export">
+        <header class="screen-head title-head"><button class="ghost" data-nav="personalize">‹</button><h2>Export & Partage</h2><button class="ghost" data-nav="home">⌂</button></header>
+        <div class="export-preview"><img src="assets/dance-scene.svg" alt="Memory prête"><button>▶</button><b>Votre Memory est prête !</b><small>Reel vertical · 30 sec</small></div>
+        <div class="export-list"><button>📸 Publier sur Instagram</button><button>♪ Publier sur TikTok</button><button>▾ Télécharger la vidéo</button><button>🟢 Envoyer sur WhatsApp</button><button>🔗 Copier le lien</button></div>
+        <button class="gold-btn" data-nav="gallery">Terminer</button>
+      </section>
+
+      <!-- 14 GALERIE -->
+      <section class="screen" id="gallery">
+        <header class="screen-head title-head"><button class="ghost" data-nav="home">‹</button><h2>Galerie Souvenirs</h2><button class="ghost" data-nav="capsule">Capsule</button></header>
+        <div class="tabs"><button class="active">Tous</button><button>Soirées</button><button>Workshops</button></div>
+        <div class="gallery-grid"><button><span class="thumb"></span><b>Kizomba Night</b><small>00:30</small></button><button><span class="thumb thumb2"></span><b>Urban Workshop</b><small>00:45</small></button><button><span class="thumb thumb3"></span><b>Freestyle</b><small>00:15</small></button><button><span class="thumb thumb4"></span><b>Golden Social</b><small>01:00</small></button></div>
+        <button class="gold-btn" data-nav="capsule">Voir Memory Capsule</button>
+      </section>
+
+      <!-- 15 CAPSULE -->
+      <section class="screen" id="capsule">
+        <header class="screen-head title-head"><button class="ghost" data-nav="gallery">‹</button><h2>Memory Capsule</h2><button class="ghost" data-nav="privacy">›</button></header>
+        <div class="capsule-card"><div class="big-crown">♛</div><h3>Kizomba Night</h3><p>12 juillet 2024 · Paris</p><ul><li><span>Durée analysée</span><b>1:24:35</b></li><li><span>Meilleur moment</span><b>00:48</b></li><li><span>Ambiance max</span><b>92%</b></li><li><span>Clips générés</span><b>12</b></li></ul></div>
+        <button class="gold-btn" data-nav="home">Voir la Memory</button>
+      </section>
+
+      <!-- 16 CONFIDENTIALITÉ -->
+      <section class="screen" id="privacy">
+        <header class="screen-head title-head"><button class="ghost" data-nav="capsule">‹</button><h2>Confidentialité</h2><button class="ghost" data-nav="settings">›</button></header>
+        <div class="privacy-card"><div class="shield">🛡</div><h3>Mode confidentialité</h3><label class="switch">Flouter les visages<input type="checkbox" checked><span></span></label><label class="switch">Retirer les passages sensibles<input type="checkbox" checked><span></span></label><label class="switch">Demander validation avant partage<input type="checkbox" checked><span></span></label><p>Vos souvenirs restent sous votre contrôle avant toute publication.</p></div>
+      </section>
+
+      <!-- 17 PARAMÈTRES -->
+      <section class="screen" id="settings">
+        <header class="screen-head title-head"><button class="ghost" data-nav="home">‹</button><h2>Paramètres</h2><span></span></header>
+        <div class="settings-list"><button>Compte <i>›</i></button><button>Abonnement <i>›</i></button><button>Qualité export <small>1080 × 1920</small></button><button>Stockage <i>›</i></button><button>Langue <small>Français</small></button><button>À propos <i>›</i></button><button class="danger">Se déconnecter</button></div>
+      </section>
+
+      <nav class="bottom-nav">
+        <button class="active" data-nav="home">⌂<span>Accueil</span></button>
+        <button data-nav="gallery">▣<span>Memories</span></button>
+        <button data-nav="studio">✣<span>Studio</span></button>
+        <button data-nav="settings">♙<span>Profil</span></button>
+      </nav>
+    </main>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>

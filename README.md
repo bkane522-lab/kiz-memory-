@@ -1,22 +1,32 @@
-# Kiz Memory V3.2.2 — Page 1 UX Fix
+# Kiz Memory V3.5 — UX Flow Clean
 
-Correction page 1 :
+Version de stabilisation UX : on garde l'accueil provisoire, puis on rend les pages 2 à 7 plus claires.
 
-- logo SVG transparent sans carré visible ;
-- titre réduit et centré ;
-- bouton remonté pour éviter qu'il soit coupé par la barre du navigateur mobile ;
-- accueil simplifié proche du board V3 ;
-- flow complet conservé : entrée, capture, analyse, format, génération, résultat.
-
-Structure :
+## Structure
 
 ```text
 assets/
-  logo-mark.svg
-  icon.svg
+  icon.png
+  logo-mark.png
+  wordmark.png
+
 index.html
 style.css
 app.js
 manifest.webmanifest
 README.md
 ```
+
+## Flow
+
+1. Accueil provisoire
+2. Choix d'entrée : filmer ou importer
+3. Capture clean sans filigrane
+4. Analyse simplifiée
+5. Choix format vertical
+6. Génération
+7. Résultat & partage
+
+## Important
+
+Prototype front-end : l'analyse IA et le montage MP4 final sont simulés.

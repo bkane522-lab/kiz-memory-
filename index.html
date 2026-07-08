@@ -3,239 +3,172 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Kiz Memory — V3.1</title>
-  <meta name="description" content="Kiz Memory transforme vos soirées et workshops en montages verticaux élégants prêts à partager." />
-  <meta name="theme-color" content="#05020b" />
+  <title>Kiz Memory — V3.2</title>
+  <meta name="description" content="Kiz Memory transforme vos soirées et workshops en Memories verticales prêtes à partager." />
+  <meta name="theme-color" content="#06020d" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.png" />
-  <link rel="apple-touch-icon" href="assets/icon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg-luxe"></div>
-
-  <main class="app" aria-live="polite">
-    <div class="status">
-      <strong>9:41</strong>
-      <span>● ● ●</span>
+  <main class="phone-shell" aria-label="Kiz Memory app">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-dots"><i></i><i></i><i></i></span>
     </div>
 
-    <!-- HOME -->
-    <section class="screen active" id="home">
-      <div class="home-brand">
-        <img src="assets/brand-header.png" alt="Kiz Memory" />
+    <section class="screen active" id="home" aria-label="Accueil">
+      <div class="home-bg" aria-hidden="true">
+        <span class="gold-particle p1"></span>
+        <span class="gold-particle p2"></span>
+        <span class="gold-particle p3"></span>
       </div>
 
-      <div class="lux-card intro-card">
-        <h1>Créez vos souvenirs dansés</h1>
-        <p>Filmez. L’IA sélectionne. Vous revivez l’essentiel en vertical 9:16.</p>
+      <div class="brand-lockup">
+        <img class="brand-icon" src="assets/icon.png" alt="Logo Kiz Memory" />
+        <h1>KIZ MEMORY</h1>
+        <p>DANCE · REMEMBER · FOREVER</p>
       </div>
 
-      <button class="btn-gold" data-go="entry">✦ Créer une Memory</button>
-
-      <div class="head-line">
-        <h2>Vos dernières Memories</h2>
-        <button data-action="demo">Voir démo</button>
+      <div class="luxury-wave" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
       </div>
 
-      <div class="memory-row">
-        <article><div class="thumb violet"></div><b>Soirée Lisboa Kizomba</b><small>01:12</small></article>
-        <article><div class="thumb gold"></div><b>Workshop Urban Kiz</b><small>00:58</small></article>
-        <article><div class="thumb cyan"></div><b>Freestyle Session</b><small>00:47</small></article>
+      <button class="primary-cta" id="startBtn" type="button">Créer une Memory</button>
+
+      <div class="home-footer">
+        <span>Capture claire</span>
+        <span>Montage automatique</span>
+        <span>Partage après génération</span>
       </div>
     </section>
 
-    <!-- ENTRY -->
-    <section class="screen" id="entry">
-      <header class="nav">
-        <button class="round" data-go="home">‹</button>
-        <h2>Nouvelle Memory</h2>
-        <button class="round" data-go="privacy">🛡</button>
+    <section class="screen" id="entry" aria-label="Choix d’entrée">
+      <header class="clean-topbar">
+        <button class="round-btn" data-go="home" type="button" aria-label="Retour">‹</button>
+        <strong>Nouvelle Memory</strong>
+        <button class="round-btn ghost" type="button" aria-label="Confidentialité">🛡</button>
       </header>
 
-      <div class="center-title">
-        <h1>Comment souhaitez-vous créer votre Memory ?</h1>
-        <p>Choisissez une entrée. Le reste se fera étape par étape.</p>
+      <div class="step-title">
+        <small>ÉTAPE 1</small>
+        <h2>Comment souhaitez-vous créer votre Memory&nbsp;?</h2>
       </div>
 
-      <button class="choice active-choice" data-go="capture">
-        <span>📷</span>
-        <strong>Filmer maintenant</strong>
-        <small>Capture claire, sans filigrane sur l’écran.</small>
-      </button>
-
-      <button class="choice" data-go="import">
-        <span>↥</span>
-        <strong>Importer une vidéo</strong>
-        <small>Depuis votre galerie, MP4 ou MOV.</small>
-      </button>
+      <div class="entry-stack">
+        <button class="entry-card selected" data-go="capture" type="button">
+          <span class="entry-icon">📷</span>
+          <b>Filmer maintenant</b>
+          <em>Capturez votre danse.</em>
+        </button>
+        <label class="entry-card">
+          <span class="entry-icon">⬆</span>
+          <b>Importer une vidéo</b>
+          <em>Depuis votre galerie.</em>
+          <input id="videoInput" type="file" accept="video/*" hidden />
+        </label>
+      </div>
     </section>
 
-    <!-- CAPTURE -->
-    <section class="screen" id="capture">
-      <header class="capture-top">
-        <button class="round" data-go="entry" data-action="stop-camera">×</button>
-        <h2>Capture</h2>
-        <button class="round" data-action="torch">⚡</button>
+    <section class="screen" id="capture" aria-label="Capture en direct">
+      <header class="capture-topbar">
+        <button class="round-btn" data-go="entry" type="button" aria-label="Fermer">×</button>
+        <time id="timer">00:00:00</time>
+        <button class="round-btn" id="flashBtn" type="button" aria-label="Flash">ϟ</button>
       </header>
 
-      <div class="camera-wrap" id="cameraWrap">
+      <div class="camera-preview">
         <video id="cameraVideo" autoplay muted playsinline></video>
         <div class="camera-empty" id="cameraEmpty">
-          <img src="assets/icon.png" alt="" />
-          <strong>Caméra prête</strong>
-          <small>Autorisez l’accès caméra pour filmer votre Memory.</small>
+          <span>Caméra prête</span>
         </div>
-        <div class="frame-corners" aria-hidden="true"></div>
-        <div class="rec-chip" id="recChip">● <span id="timer">00:00:00</span></div>
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
       </div>
 
-      <div class="mode-tabs" role="tablist">
-        <button class="active" data-mode="Soirée">👥<span>Soirée</span></button>
-        <button data-mode="Workshop">🎓<span>Workshop</span></button>
-        <button data-mode="Freestyle">∞<span>Freestyle</span></button>
+      <div class="mode-switch" role="tablist">
+        <button class="active" type="button">Soirée</button>
+        <button type="button">Workshop</button>
+        <button type="button">Freestyle</button>
       </div>
 
-      <div class="capture-actions">
-        <button class="mini" data-action="switch-camera" title="Changer caméra">↻</button>
-        <button class="record" id="recordBtn" data-action="record"><i></i></button>
-        <button class="mini" data-go="import" title="Importer">▧</button>
+      <div class="record-row">
+        <button class="secondary-btn" data-go="entry" type="button">Importer</button>
+        <button class="record-btn" id="recordBtn" type="button" aria-label="Enregistrer"><span></span></button>
+        <button class="secondary-btn" data-go="analysis" type="button">Continuer</button>
       </div>
-
-      <button class="btn-muted" data-go="import">Importer plutôt une vidéo</button>
     </section>
 
-    <!-- IMPORT -->
-    <section class="screen" id="import">
-      <header class="nav">
-        <button class="round" data-go="entry">‹</button>
-        <h2>Importer</h2>
-        <button class="round" data-go="privacy">?</button>
-      </header>
-
-      <label class="drop-zone" for="videoInput">
-        <div class="cloud">↥</div>
-        <h1>Importez votre vidéo</h1>
-        <p>MP4, MOV · idéalement vertical 9:16</p>
-        <input id="videoInput" type="file" accept="video/*" hidden />
-      </label>
-
-      <div class="selected-file hidden" id="selectedFile">
-        <video id="importPreview" muted playsinline controls></video>
-        <div>
-          <strong id="fileTitle">Vidéo sélectionnée</strong>
-          <small id="fileMeta">Prête pour analyse</small>
-        </div>
-      </div>
-
-      <button class="btn-gold disabled" id="analyseImportBtn" disabled>Analyser la vidéo</button>
-      <p class="note">Importation locale et privée dans ce prototype.</p>
-    </section>
-
-    <!-- ANALYSIS -->
-    <section class="screen" id="analysis">
-      <header class="nav simple">
-        <button class="round" data-go="entry">‹</button>
-        <h2>Analyse</h2>
+    <section class="screen" id="analysis" aria-label="Analyse">
+      <header class="clean-topbar compact">
+        <button class="round-btn" data-go="capture" type="button" aria-label="Retour">‹</button>
+        <strong>Analyse</strong>
         <span></span>
       </header>
 
-      <div class="analysis-card">
-        <h1>Analyse en cours…</h1>
-        <p>L’IA détecte les meilleurs moments et prépare votre montage.</p>
-        <div class="ring" style="--p:0" id="analysisRing"><strong id="analysisPercent">0%</strong></div>
-        <ol class="steps">
+      <div class="analysis-center">
+        <h2>Analyse en cours…</h2>
+        <p>On détecte les meilleurs moments et on prépare votre montage.</p>
+        <div class="progress-ring"><span id="percent">65%</span></div>
+        <ol>
           <li class="done">Analyse vidéo</li>
-          <li id="step2">Détection des temps forts</li>
-          <li id="step3">Préparation du montage</li>
+          <li class="active">Détection des temps forts</li>
+          <li>Montage automatique</li>
         </ol>
       </div>
+      <button class="primary-cta small" data-go="format" type="button">Voir les formats</button>
     </section>
 
-    <!-- FORMAT -->
-    <section class="screen" id="format">
-      <header class="nav">
-        <button class="round" data-go="analysis">‹</button>
-        <h2>Format vertical</h2>
+    <section class="screen" id="format" aria-label="Choix du format">
+      <header class="clean-topbar compact">
+        <button class="round-btn" data-go="analysis" type="button" aria-label="Retour">‹</button>
+        <strong>Choix du format</strong>
         <span></span>
       </header>
 
-      <div class="center-title small">
-        <h1>Choisissez le format de votre Memory</h1>
-        <p>Uniquement des formats verticaux pour réseaux sociaux.</p>
+      <div class="step-title tight">
+        <h2>Choisissez le format de votre Memory</h2>
       </div>
 
       <div class="format-list">
-        <button data-duration="15"><i></i><span><b>Story 15s</b><small>Teaser rapide</small></span><em>9:16</em></button>
-        <button class="selected" data-duration="30"><i></i><span><b>Reel 30s</b><small>Format conseillé</small></span><em>9:16</em></button>
-        <button data-duration="60"><i></i><span><b>Aftermovie 60s</b><small>Plus immersif</small></span><em>9:16</em></button>
+        <button class="selected" type="button"><b>Story 15s</b><em>Format vertical rapide</em></button>
+        <button type="button"><b>Reel 30s</b><em>Dynamique & rythmé</em></button>
+        <button type="button"><b>Aftermovie 60s</b><em>Immersif & émotionnel</em></button>
       </div>
-
-      <button class="btn-gold" data-go="generation">Générer la Memory ✨</button>
+      <button class="primary-cta small" data-go="generation" type="button">Générer la Memory</button>
     </section>
 
-    <!-- GENERATION -->
-    <section class="screen" id="generation">
-      <div class="generation-center">
-        <img src="assets/icon.png" alt="Kiz Memory" />
-        <h1>Votre Memory est en génération</h1>
-        <p>Montage automatique en cours. Merci pour votre patience.</p>
-        <div class="lux-loader"><span></span></div>
-        <strong id="genText">Préparation du format vertical…</strong>
+    <section class="screen" id="generation" aria-label="Génération">
+      <div class="generation-core">
+        <div class="pulse-logo"><img src="assets/icon.png" alt="" /></div>
+        <h2>Votre Memory est en cours de génération</h2>
+        <p>Merci pour votre patience.</p>
       </div>
+      <button class="primary-cta small" data-go="result" type="button">Voir le résultat</button>
     </section>
 
-    <!-- RESULT -->
-    <section class="screen" id="result">
-      <header class="nav">
-        <button class="round" data-go="home">⌂</button>
-        <h2>Memory prête</h2>
-        <button class="round" data-go="privacy">🛡</button>
-      </header>
-
-      <div class="result-preview">
-        <video id="resultVideo" playsinline controls></video>
-        <div class="result-fallback" id="resultFallback">
-          <img src="assets/icon.png" alt="" />
-          <strong>KIZOMBA NIGHT</strong>
-          <small>Paris · <span id="resultDuration">30s</span> · 9:16</small>
-        </div>
-      </div>
-
-      <div class="share-title">
-        <h3>Partager votre Memory</h3>
-        <p>Le partage natif Android est le plus fiable pour Instagram et TikTok.</p>
-      </div>
-
-      <div class="share-grid">
-        <button data-action="native-share">↗<span>Partager</span></button>
-        <button data-action="instagram">◎<span>Instagram</span></button>
-        <button data-action="tiktok">♪<span>TikTok</span></button>
-        <button data-action="whatsapp">◉<span>WhatsApp</span></button>
-      </div>
-
-      <button class="btn-gold" data-action="download">Télécharger la fiche</button>
-      <button class="btn-muted" data-action="copy-link">Copier le lien</button>
-    </section>
-
-    <!-- PRIVACY -->
-    <section class="screen" id="privacy">
-      <header class="nav">
-        <button class="round" data-back>‹</button>
-        <h2>Confidentialité</h2>
+    <section class="screen" id="result" aria-label="Résultat et partage">
+      <header class="clean-topbar compact">
+        <button class="round-btn" data-go="format" type="button" aria-label="Retour">‹</button>
+        <strong>Memory prête</strong>
         <span></span>
       </header>
-      <div class="privacy-card">
-        <div class="shield">🛡</div>
-        <h1>Avant de partager</h1>
-        <p>Dans une version publique, il faudra gérer le droit à l’image, le floutage et la validation avant publication.</p>
-        <label><span>Validation avant partage</span><input type="checkbox" checked /></label>
-        <label><span>Option floutage visage</span><input type="checkbox" checked /></label>
-        <label><span>Retirer un passage sensible</span><input type="checkbox" checked /></label>
+      <div class="result-card">
+        <div class="poster">
+          <button class="play" type="button">▶</button>
+          <b>KIZOMBA NIGHT</b>
+          <small>24 MAI 2024 · PARIS · 00:30</small>
+        </div>
+        <p>Partager votre Memory</p>
+        <div class="share-row">
+          <button type="button">Instagram</button>
+          <button type="button">TikTok</button>
+          <button type="button">WhatsApp</button>
+          <button type="button">Plus</button>
+        </div>
       </div>
     </section>
-
-    <div class="toast" id="toast"></div>
   </main>
 
   <script src="app.js"></script>

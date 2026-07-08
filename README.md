@@ -1,22 +1,20 @@
-# Kiz Memory — V3.1 Brand Lock
+# Kiz Memory V3.2 — Page 1 Lock
 
-Cette version verrouille l’identité visuelle validée : logo luxe couple + couronne, or royal, violet profond, noir premium.
+Version centrée sur la page d’accueil fidèle à la maquette validée :
 
-## Objectifs
+- logo luxe centré
+- noir profond / violet / or royal
+- une seule action principale : Créer une Memory
+- pas de cartes qui surchargent l’accueil
+- capture sans filigrane sur la caméra
 
-- Revenir au branding validé, sans logo abstrait différent.
-- Garder une UX V3 simplifiée.
-- Supprimer le filigrane gênant sur l’écran caméra.
-- Mettre le partage uniquement à la fin.
-- Garder un parcours clair : accueil → choix entrée → capture/import → analyse → format → génération → résultat.
-
-## Structure
+Structure :
 
 ```text
 assets/
-  brand-header.png
-  brand-board.png
   icon.png
+  logo-mark.png
+  brand-header.png
 
 index.html
 style.css
@@ -25,7 +23,4 @@ manifest.webmanifest
 README.md
 ```
 
-## Important
-
-Prototype front-end : l’analyse IA et la génération du montage sont simulées.
-Pour le vrai export MP4 automatique, il faudra ajouter un moteur vidéo, par exemple FFmpeg côté serveur ou une solution mobile dédiée.
+Cette version garde un flow minimal pour tester les écrans suivants, mais la priorité est la validation de la page 1.

@@ -1,18 +1,13 @@
 {
   "name": "Kiz Memory",
   "short_name": "Kiz Memory",
-  "description": "Montages verticaux élégants pour soirées et workshops Kizomba.",
+  "description": "Capture claire, montage automatique et partage après génération.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#040208",
-  "theme_color": "#05020b",
+  "background_color": "#05030a",
+  "theme_color": "#06020d",
   "orientation": "portrait",
   "icons": [
-    {
-      "src": "assets/icon.png",
-      "sizes": "180x180",
-      "type": "image/png"
-    },
     {
       "src": "assets/icon.png",
       "sizes": "512x512",

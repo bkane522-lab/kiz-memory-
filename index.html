@@ -1,196 +1,151 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Kiz Memory — V3.2.1</title>
-  <meta name="description" content="Kiz Memory transforme vos soirées et workshops en Memories verticales prêtes à partager." />
-  <meta name="theme-color" content="#07030d" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Kiz Memory — V3.2.2</title>
+  <meta name="description" content="Kiz Memory crée des récapitulatifs vidéo verticaux de soirées et workshops Kizomba." />
+  <meta name="theme-color" content="#08030f" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="assets/icon.png" />
+  <link rel="icon" href="assets/icon.svg" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="app-shell" aria-live="polite">
-    <div class="lux-bg" aria-hidden="true">
-      <span class="dust d1"></span>
-      <span class="dust d2"></span>
-      <span class="dust d3"></span>
-      <span class="wave w1"></span>
-      <span class="wave w2"></span>
-      <span class="glow g1"></span>
-      <span class="glow g2"></span>
-    </div>
+  <main class="phone-app" aria-live="polite">
+    <div class="status"><strong>9:41</strong><span>● ● ●</span></div>
 
-    <div class="status-row">
-      <span>9:41</span>
-      <span class="dots"><i></i><i></i><i></i></span>
-    </div>
-
-    <!-- PAGE 1: ACCUEIL LOCK -->
-    <section class="screen active home-screen" id="home">
-      <div class="home-center">
-        <img class="logo-mark" src="assets/logo-mark.png" alt="Kiz Memory" />
+    <section class="screen active home" id="home">
+      <div class="home-bg-lines"></div>
+      <div class="brand-lockup" aria-label="Kiz Memory">
+        <img class="brand-mark" src="assets/logo-mark.svg" alt="Logo Kiz Memory" />
         <h1>KIZ MEMORY</h1>
-        <p class="tagline">DANCE · REMEMBER · FOREVER</p>
+        <p>DANCE · REMEMBER · FOREVER</p>
       </div>
-
-      <div class="home-bottom">
-        <button class="gold-btn" data-go="entry">Créer une Memory</button>
-        <p class="tiny-note">Récap vertical 9:16 · simple · élégant · social</p>
-      </div>
+      <button class="gold-btn home-cta" data-go="entry">Créer une Memory</button>
     </section>
 
-    <!-- PAGE 2: CHOIX D'ENTRÉE -->
-    <section class="screen" id="entry">
+    <section class="screen entry" id="entry">
       <header class="top-nav">
-        <button class="round-btn" data-go="home" aria-label="Retour">‹</button>
-        <strong>Nouvelle Memory</strong>
-        <button class="round-btn" data-go="privacy" aria-label="Confidentialité">🛡</button>
+        <button class="square-btn" data-go="home">‹</button>
+        <h2>Nouvelle Memory</h2>
+        <button class="square-btn shield" data-toast="Vos fichiers restent privés dans ce prototype.">🛡</button>
       </header>
-
-      <div class="entry-copy">
-        <h2>Comment souhaitez-vous créer votre Memory&nbsp;?</h2>
+      <div class="intro-copy">
+        <h3>Comment souhaitez-vous créer votre Memory ?</h3>
         <p>Choisissez une entrée. Le reste se fera étape par étape.</p>
       </div>
-
-      <div class="entry-stack">
-        <button class="entry-card featured" data-go="capture">
-          <span>📷</span>
-          <b>Filmer maintenant</b>
-          <small>Capture claire, sans filigrane sur l’écran.</small>
-        </button>
-        <label class="entry-card">
-          <span>↥</span>
-          <b>Importer une vidéo</b>
-          <small>Depuis votre galerie, MP4 ou MOV.</small>
-          <input id="videoInput" type="file" accept="video/*" hidden />
-        </label>
-      </div>
+      <button class="entry-card primary-choice" id="filmChoice">
+        <span>📷</span>
+        <b>Filmer maintenant</b>
+        <small>Capture claire, sans filigrane sur l’écran.</small>
+      </button>
+      <button class="entry-card" id="importChoice">
+        <span>⬆</span>
+        <b>Importer une vidéo</b>
+        <small>Depuis votre galerie, MP4 ou MOV.</small>
+      </button>
+      <input type="file" accept="video/*" id="fileInput" hidden />
     </section>
 
-    <!-- PAGE 3: CAPTURE -->
-    <section class="screen" id="capture">
-      <header class="capture-top">
-        <button class="round-btn" data-go="entry" aria-label="Fermer">×</button>
-        <span id="timer">00:00:00</span>
-        <button class="round-btn" id="flipBtn" aria-label="Changer caméra">↻</button>
+    <section class="screen capture" id="capture">
+      <header class="capture-nav">
+        <button class="square-btn" data-go="entry">×</button>
+        <time id="captureTime">00:00:00</time>
+        <button class="square-btn" id="torchBtn">⚡</button>
       </header>
-
       <div class="camera-frame">
-        <video id="cameraVideo" autoplay muted playsinline></video>
-        <div class="empty-camera" id="emptyCamera">
-          <span>Caméra</span>
-          <small>Appuyez sur “Filmer maintenant” pour autoriser la caméra.</small>
+        <video id="cameraPreview" autoplay muted playsinline></video>
+        <div class="no-camera" id="noCamera">
+          <span>📷</span>
+          <b>Caméra prête</b>
+          <small>Appuyez sur le bouton pour autoriser l’accès.</small>
         </div>
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
       </div>
-
-      <div class="mode-row">
-        <button class="mode active">Soirée</button>
-        <button class="mode">Workshop</button>
-        <button class="mode">Freestyle</button>
+      <div class="mode-row" role="tablist">
+        <button class="active">Soirée</button>
+        <button>Workshop</button>
+        <button>Freestyle</button>
       </div>
-
-      <div class="record-zone">
-        <button class="mini-btn" id="torchBtn">⚡</button>
+      <div class="record-row">
+        <button class="secondary-square" id="openImport2">▧</button>
         <button class="record-btn" id="recordBtn" aria-label="Enregistrer"><span></span></button>
-        <button class="mini-btn" data-go="entry">↥</button>
+        <strong id="recordLabel">Prêt</strong>
       </div>
-
-      <button class="ghost-wide" data-go="analysis">Continuer avec une démo</button>
+      <button class="ghost-btn" id="goImportFromCapture">Importer plutôt une vidéo</button>
     </section>
 
-    <!-- PAGE 4: ANALYSE -->
-    <section class="screen" id="analysis">
-      <header class="top-nav minimal">
-        <button class="round-btn" data-go="entry">‹</button>
-        <strong>Analyse</strong>
+    <section class="screen analysis" id="analysis">
+      <header class="top-nav center-only">
+        <button class="square-btn" data-go="entry">‹</button>
+        <h2>Analyse</h2>
         <span></span>
       </header>
-
-      <div class="analysis-box">
-        <h2>Analyse en cours…</h2>
+      <div class="analysis-center">
+        <h3>Analyse en cours…</h3>
         <p>On détecte les meilleurs moments et on prépare votre montage.</p>
-        <div class="progress-ring"><span id="analysisPercent">0%</span></div>
-        <ul class="steps">
-          <li class="active"><span>1</span>Analyse vidéo</li>
-          <li><span>2</span>Détection des temps forts</li>
-          <li><span>3</span>Montage automatique</li>
-        </ul>
+        <div class="ring" style="--p:0" id="analysisRing"><strong id="analysisPct">0%</strong></div>
+        <ol class="steps">
+          <li class="done"><span>1</span>Analyse vidéo</li>
+          <li id="step2"><span>2</span>Détection des temps forts</li>
+          <li id="step3"><span>3</span>Montage automatique</li>
+        </ol>
       </div>
     </section>
 
-    <!-- PAGE 5: FORMAT -->
-    <section class="screen" id="format">
-      <header class="top-nav minimal">
-        <button class="round-btn" data-go="analysis">‹</button>
-        <strong>Choix du format</strong>
+    <section class="screen format" id="format">
+      <header class="top-nav center-only">
+        <button class="square-btn" data-go="analysis">‹</button>
+        <h2>Choix du format</h2>
         <span></span>
       </header>
-
-      <div class="format-title">
-        <h2>Choisissez le format de votre Memory</h2>
+      <div class="format-copy">
+        <h3>Choisissez le format de votre Memory</h3>
+        <p>Vertical 9:16, prêt pour les réseaux sociaux.</p>
       </div>
-
       <div class="format-list">
-        <button class="format-card selected" data-duration="15"><i></i><b>Story 15s</b><small>Format vertical rapide</small><em>9:16</em></button>
-        <button class="format-card" data-duration="30"><i></i><b>Reel 30s</b><small>Dynamique & rythmé</small><em>9:16</em></button>
-        <button class="format-card" data-duration="60"><i></i><b>Aftermovie 60s</b><small>Immersif & émotionnel</small><em>9:16</em></button>
+        <button data-duration="15" class="active"><i></i><b>Story 15s</b><small>Format vertical rapide</small><em>9:16</em></button>
+        <button data-duration="30"><i></i><b>Reel 30s</b><small>Dynamique & rythmé</small><em>9:16</em></button>
+        <button data-duration="60"><i></i><b>Aftermovie 60s</b><small>Immersif & émotionnel</small><em>9:16</em></button>
       </div>
-      <button class="gold-btn fixed-bottom" data-go="generate">Continuer</button>
+      <button class="gold-btn" data-go="generation">Générer la Memory</button>
     </section>
 
-    <!-- PAGE 6: GÉNÉRATION -->
-    <section class="screen" id="generate">
-      <div class="generate-center">
-        <div class="orbit"><img src="assets/logo-mark.png" alt="" /></div>
+    <section class="screen generation" id="generation">
+      <div class="gen-lockup">
+        <img src="assets/logo-mark.svg" alt="" />
         <h2>Votre Memory est en cours de génération</h2>
         <p>Merci pour votre patience.</p>
+        <div class="gen-orbit"></div>
       </div>
     </section>
 
-    <!-- PAGE 7: RÉSULTAT -->
-    <section class="screen" id="result">
-      <header class="top-nav minimal">
-        <button class="round-btn" data-go="home">⌂</button>
-        <strong>Memory prête</strong>
-        <button class="round-btn" id="downloadBtn">↓</button>
+    <section class="screen result" id="result">
+      <header class="top-nav center-only">
+        <button class="square-btn" data-go="format">‹</button>
+        <h2>Memory prête</h2>
+        <button class="square-btn" data-toast="Mode aperçu prototype.">✦</button>
       </header>
-
-      <div class="result-card">
-        <video id="resultVideo" playsinline muted loop></video>
-        <div class="result-fallback"></div>
-        <button class="play-btn">▶</button>
-        <div class="result-text">
+      <article class="result-card">
+        <video id="resultVideo" playsinline controls></video>
+        <div class="result-fallback" id="resultFallback">
+          <span>▶</span>
           <b>KIZOMBA NIGHT</b>
-          <small>PARIS · 00:<span id="durationLabel">15</span> · 9:16</small>
+          <small>24 MAI 2024 · PARIS · <em id="finalDuration">15s</em></small>
         </div>
+      </article>
+      <p class="share-title">Partager votre Memory</p>
+      <div class="share-grid">
+        <button data-share="instagram">◎<small>Instagram</small></button>
+        <button data-share="tiktok">♪<small>TikTok</small></button>
+        <button data-share="whatsapp">☘<small>WhatsApp</small></button>
+        <button data-share="more">•••<small>Plus</small></button>
       </div>
-
-      <p class="share-label">Partager votre Memory</p>
-      <div class="share-row">
-        <button id="shareNative">↗<span>Partager</span></button>
-        <button id="shareInstagram">◎<span>Instagram</span></button>
-        <button id="shareTikTok">♪<span>TikTok</span></button>
-        <button id="shareWhatsapp">☘<span>WhatsApp</span></button>
-      </div>
+      <button class="ghost-btn" id="downloadBtn">Télécharger la fiche prototype</button>
     </section>
 
-    <section class="screen" id="privacy">
-      <header class="top-nav minimal">
-        <button class="round-btn" data-go="entry">‹</button>
-        <strong>Confidentialité</strong>
-        <span></span>
-      </header>
-      <div class="privacy-card">
-        <h2>Vos souvenirs restent privés.</h2>
-        <p>La version finale devra prévoir validation, floutage et contrôle avant diffusion.</p>
-        <button class="gold-btn" data-go="entry">Compris</button>
-      </div>
-    </section>
+    <div class="toast" id="toast"></div>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>

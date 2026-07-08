@@ -1,29 +1,22 @@
-# Kiz Memory V3.2.1 — Page 1 Luxe Fix
+# Kiz Memory V3.2.2 — Page 1 UX Fix
 
-Objectif : corriger l'accueil pour se rapprocher de la maquette V3 validée.
+Correction page 1 :
 
-## Corrections principales
+- logo SVG transparent sans carré visible ;
+- titre réduit et centré ;
+- bouton remonté pour éviter qu'il soit coupé par la barre du navigateur mobile ;
+- accueil simplifié proche du board V3 ;
+- flow complet conservé : entrée, capture, analyse, format, génération, résultat.
 
-- Logo en emblème, sans carré visible sur l'accueil.
-- Titre KIZ MEMORY réduit et mieux proportionné.
-- Fond noir/violet/or plus premium.
-- Page 1 sans cartes souvenirs ni gros bloc vitré.
-- Une seule action principale : Créer une Memory.
-- Capture sans filigrane sur la caméra.
-- Flow simplifié : accueil → choix entrée → capture/import → analyse → format → génération → partage.
-
-## Structure
+Structure :
 
 ```text
 assets/
-  icon.png
-  logo-mark.png
-
+  logo-mark.svg
+  icon.svg
 index.html
 style.css
 app.js
 manifest.webmanifest
 README.md
 ```
-
-Cette version reste un prototype front-end. Le vrai montage vidéo MP4 automatique sera une étape suivante.

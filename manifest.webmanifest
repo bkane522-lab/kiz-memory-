@@ -1,17 +1,1 @@
-{
-  "name": "Kiz Memory",
-  "short_name": "Kiz Memory",
-  "description": "Créez des Memories verticales premium pour vos soirées et workshops.",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#06030a",
-  "theme_color": "#06030a",
-  "orientation": "portrait",
-  "icons": [
-    {
-      "src": "assets/icon.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
-}
+{"name":"Kiz Memory","short_name":"Kiz Memory","description":"Récaps verticaux de soirées et workshops Kizomba.","start_url":"./","display":"standalone","background_color":"#05030a","theme_color":"#08030f","orientation":"portrait","icons":[{"src":"assets/icon.svg","sizes":"192x192","type":"image/svg+xml"}]}

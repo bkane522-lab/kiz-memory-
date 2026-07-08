@@ -1,246 +1,35 @@
-const state = {
-  duration: 15,
-  cameraStream: null,
-  mediaRecorder: null,
-  chunks: [],
-  recordedUrl: null,
-  timer: null,
-  seconds: 0,
-  facingMode: "environment"
-};
-
-const screens = [...document.querySelectorAll(".screen")];
-const cameraVideo = document.querySelector("#cameraVideo");
-const emptyCamera = document.querySelector("#emptyCamera");
-const resultVideo = document.querySelector("#resultVideo");
-const videoInput = document.querySelector("#videoInput");
-const timerLabel = document.querySelector("#timer");
-
-function go(id) {
-  screens.forEach(screen => screen.classList.toggle("active", screen.id === id));
-  if (id === "capture") startCamera();
-  if (id === "analysis") startAnalysis();
-  if (id === "generate") startGenerate();
+const state = { duration: 15, stream: null, recorder: null, chunks: [], videoUrl: null, timer: null, seconds: 0 };
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+function go(id){ $$('.screen').forEach(s=>s.classList.toggle('active',s.id===id)); if(id==='analysis') startAnalysis(); if(id==='generation') startGeneration(); if(id==='result') syncResult(); }
+$$('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2500); }
+$$('[data-toast]').forEach(b=>b.addEventListener('click',()=>toast(b.dataset.toast)));
+$('#filmChoice').addEventListener('click', async()=>{ go('capture'); await startCamera(); });
+$('#importChoice').addEventListener('click',()=>$('#fileInput').click());
+$('#openImport2').addEventListener('click',()=>$('#fileInput').click());
+$('#goImportFromCapture').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change', e=>{ const f=e.target.files?.[0]; if(!f) return; setVideo(URL.createObjectURL(f)); toast('Vidéo importée. Analyse prête.'); go('analysis'); });
+async function startCamera(){
+  try{ state.stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:true}); $('#cameraPreview').srcObject=state.stream; $('#noCamera').classList.add('hide'); $('#recordLabel').textContent='Prêt'; }
+  catch(err){ toast('Caméra non autorisée. Vous pouvez importer une vidéo.'); $('#recordLabel').textContent='Import'; }
 }
-
-document.querySelectorAll("[data-go]").forEach(button => {
-  button.addEventListener("click", () => go(button.dataset.go));
+$('#torchBtn').addEventListener('click', async()=>{
+  try{ const track=state.stream?.getVideoTracks?.()[0]; const caps=track?.getCapabilities?.(); if(!caps?.torch){ toast('Torche non supportée par ce navigateur.'); return; } const on=!track._torch; await track.applyConstraints({advanced:[{torch:on}]}); track._torch=on; toast(on?'Flash activé':'Flash désactivé'); }
+  catch{ toast('Flash indisponible ici.'); }
 });
-
-document.querySelectorAll(".mode").forEach(button => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".mode").forEach(item => item.classList.remove("active"));
-    button.classList.add("active");
-  });
-});
-
-videoInput.addEventListener("change", event => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
-  state.recordedUrl = URL.createObjectURL(file);
-  resultVideo.src = state.recordedUrl;
-  go("analysis");
-});
-
-document.querySelectorAll(".format-card").forEach(button => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".format-card").forEach(item => item.classList.remove("selected"));
-    button.classList.add("selected");
-    state.duration = Number(button.dataset.duration);
-    document.querySelector("#durationLabel").textContent = String(state.duration).padStart(2, "0");
-  });
-});
-
-async function startCamera() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    emptyCamera.innerHTML = "<span>Caméra indisponible</span><small>Votre navigateur ne permet pas la capture directe. Importez une vidéo.</small>";
-    return;
-  }
-
-  try {
-    stopCamera();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: state.facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
-      audio: true
-    });
-    state.cameraStream = stream;
-    cameraVideo.srcObject = stream;
-    emptyCamera.style.display = "none";
-  } catch (error) {
-    emptyCamera.style.display = "grid";
-    emptyCamera.innerHTML = "<span>Autorisation caméra</span><small>Autorisez la caméra ou utilisez l’import vidéo.</small>";
-  }
+$('#recordBtn').addEventListener('click',()=>{ if(state.recorder?.state==='recording') stopRecording(); else startRecording(); });
+function startRecording(){
+  if(!state.stream){ toast('Autorisez la caméra ou importez une vidéo.'); return; }
+  try{ state.chunks=[]; state.recorder=new MediaRecorder(state.stream); state.recorder.ondataavailable=e=>{ if(e.data.size) state.chunks.push(e.data); }; state.recorder.onstop=()=>{ setVideo(URL.createObjectURL(new Blob(state.chunks,{type:'video/webm'}))); go('analysis'); }; state.recorder.start(); state.seconds=0; $('#recordBtn').classList.add('recording'); $('#recordLabel').textContent='REC'; state.timer=setInterval(()=>{ state.seconds++; $('#captureTime').textContent=new Date(state.seconds*1000).toISOString().substring(11,19); },1000); }
+  catch{ toast('Enregistrement non supporté. Importez une vidéo.'); }
 }
-
-function stopCamera() {
-  if (state.cameraStream) {
-    state.cameraStream.getTracks().forEach(track => track.stop());
-    state.cameraStream = null;
-  }
-}
-
-document.querySelector("#flipBtn").addEventListener("click", async () => {
-  state.facingMode = state.facingMode === "environment" ? "user" : "environment";
-  await startCamera();
-});
-
-document.querySelector("#torchBtn").addEventListener("click", async () => {
-  const track = state.cameraStream?.getVideoTracks?.()[0];
-  const capabilities = track?.getCapabilities?.();
-  if (!track || !capabilities?.torch) {
-    toast("Torche non supportée sur ce navigateur.");
-    return;
-  }
-  const current = track.getSettings().torch || false;
-  await track.applyConstraints({ advanced: [{ torch: !current }] });
-});
-
-document.querySelector("#recordBtn").addEventListener("click", () => {
-  if (!state.mediaRecorder || state.mediaRecorder.state === "inactive") {
-    startRecording();
-  } else {
-    stopRecording();
-  }
-});
-
-function startRecording() {
-  if (!state.cameraStream || !window.MediaRecorder) {
-    toast("Enregistrement indisponible. Utilisez l’import vidéo.");
-    return;
-  }
-  state.chunks = [];
-  state.mediaRecorder = new MediaRecorder(state.cameraStream);
-  state.mediaRecorder.ondataavailable = event => {
-    if (event.data.size) state.chunks.push(event.data);
-  };
-  state.mediaRecorder.onstop = () => {
-    const blob = new Blob(state.chunks, { type: "video/webm" });
-    if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
-    state.recordedUrl = URL.createObjectURL(blob);
-    resultVideo.src = state.recordedUrl;
-    stopTimer();
-    go("analysis");
-  };
-  state.mediaRecorder.start();
-  document.querySelector("#recordBtn").classList.add("recording");
-  startTimer();
-}
-
-function stopRecording() {
-  if (state.mediaRecorder?.state === "recording") state.mediaRecorder.stop();
-  document.querySelector("#recordBtn").classList.remove("recording");
-}
-
-function startTimer() {
-  state.seconds = 0;
-  timerLabel.textContent = "00:00:00";
-  clearInterval(state.timer);
-  state.timer = setInterval(() => {
-    state.seconds += 1;
-    const h = String(Math.floor(state.seconds / 3600)).padStart(2, "0");
-    const m = String(Math.floor((state.seconds % 3600) / 60)).padStart(2, "0");
-    const s = String(state.seconds % 60).padStart(2, "0");
-    timerLabel.textContent = `${h}:${m}:${s}`;
-  }, 1000);
-}
-
-function stopTimer() {
-  clearInterval(state.timer);
-  timerLabel.textContent = "00:00:00";
-}
-
-function startAnalysis() {
-  let value = 0;
-  const percent = document.querySelector("#analysisPercent");
-  const steps = [...document.querySelectorAll(".steps li")];
-  const timer = setInterval(() => {
-    value += 5;
-    percent.textContent = `${Math.min(value, 100)}%`;
-    if (value >= 35) steps[1].classList.add("active");
-    if (value >= 70) steps[2].classList.add("active");
-    if (value >= 100) {
-      clearInterval(timer);
-      setTimeout(() => go("format"), 450);
-    }
-  }, 110);
-}
-
-function startGenerate() {
-  setTimeout(() => go("result"), 2200);
-}
-
-document.querySelector(".play-btn").addEventListener("click", () => {
-  if (!resultVideo.src) return;
-  if (resultVideo.paused) resultVideo.play();
-  else resultVideo.pause();
-});
-
-document.querySelector("#downloadBtn").addEventListener("click", () => {
-  const data = {
-    app: "Kiz Memory",
-    version: "V3.2.1 Page 1 Luxe Fix",
-    format: "9:16",
-    duration: `${state.duration}s`,
-    note: "Prototype front-end. Le vrai export MP4 automatique sera ajouté ensuite."
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "kiz-memory-recap.json";
-  link.click();
-  URL.revokeObjectURL(url);
-});
-
-document.querySelector("#shareNative").addEventListener("click", async () => {
-  const payload = { title: "Kiz Memory", text: "Ma Memory Kizomba est prête ✨", url: location.href };
-  if (navigator.share) await navigator.share(payload);
-  else copyLink();
-});
-
-document.querySelector("#shareWhatsapp").addEventListener("click", () => {
-  window.open(`https://wa.me/?text=${encodeURIComponent("Ma Memory Kizomba est prête ✨ " + location.href)}`, "_blank");
-});
-
-document.querySelector("#shareInstagram").addEventListener("click", async () => {
-  if (navigator.share) return navigator.share({ title: "Kiz Memory", text: "Ma Memory Kizomba est prête ✨", url: location.href });
-  window.open("https://www.instagram.com/", "_blank");
-});
-
-document.querySelector("#shareTikTok").addEventListener("click", async () => {
-  if (navigator.share) return navigator.share({ title: "Kiz Memory", text: "Ma Memory Kizomba est prête ✨", url: location.href });
-  window.open("https://www.tiktok.com/", "_blank");
-});
-
-async function copyLink() {
-  try {
-    await navigator.clipboard.writeText(location.href);
-    toast("Lien copié.");
-  } catch {
-    toast("Partage indisponible.");
-  }
-}
-
-function toast(message) {
-  const old = document.querySelector(".toast");
-  if (old) old.remove();
-  const box = document.createElement("div");
-  box.className = "toast";
-  box.textContent = message;
-  Object.assign(box.style, {
-    position: "fixed",
-    left: "50%",
-    bottom: "28px",
-    transform: "translateX(-50%)",
-    background: "rgba(0,0,0,.82)",
-    color: "#fff7df",
-    border: "1px solid rgba(255,255,255,.16)",
-    borderRadius: "999px",
-    padding: "12px 18px",
-    fontWeight: "800",
-    zIndex: 9999
-  });
-  document.body.appendChild(box);
-  setTimeout(() => box.remove(), 2200);
-}
+function stopRecording(){ try{ state.recorder.stop(); }catch{} clearInterval(state.timer); $('#recordBtn').classList.remove('recording'); $('#recordLabel').textContent='Analyse'; }
+function setVideo(url){ if(state.videoUrl) URL.revokeObjectURL(state.videoUrl); state.videoUrl=url; }
+$$('.mode-row button').forEach(b=>b.addEventListener('click',()=>{ $$('.mode-row button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); }));
+function startAnalysis(){ let p=0; $('#analysisRing').style.setProperty('--p',0); $('#analysisPct').textContent='0%'; $('#step2').classList.remove('active','done'); $('#step3').classList.remove('active','done'); const h=setInterval(()=>{ p+=5; $('#analysisRing').style.setProperty('--p',p); $('#analysisPct').textContent=p+'%'; if(p>=34) $('#step2').classList.add('active'); if(p>=66){ $('#step2').classList.remove('active'); $('#step2').classList.add('done'); $('#step3').classList.add('active'); } if(p>=100){ clearInterval(h); $('#step3').classList.remove('active'); $('#step3').classList.add('done'); setTimeout(()=>go('format'),450); } },95); }
+$$('.format-list button').forEach(b=>b.addEventListener('click',()=>{ $$('.format-list button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); state.duration=Number(b.dataset.duration); }));
+function startGeneration(){ setTimeout(()=>go('result'),2300); }
+function syncResult(){ $('#finalDuration').textContent=state.duration+'s'; const card=$('.result-card'); const vid=$('#resultVideo'); if(state.videoUrl){ vid.src=state.videoUrl; card.classList.add('has-video'); $('#resultFallback').style.display='none'; } else { card.classList.remove('has-video'); $('#resultFallback').style.display='grid'; } }
+$$('[data-share]').forEach(b=>b.addEventListener('click',async()=>{ const text='Ma Memory Kiz Memory est prête ✨'; if(b.dataset.share==='whatsapp'){ location.href='https://wa.me/?text='+encodeURIComponent(text+' '+location.href); return; } if(navigator.share){ try{ await navigator.share({title:'Kiz Memory',text,url:location.href}); }catch{} } else toast('Partage système non disponible.'); }));
+$('#downloadBtn').addEventListener('click',()=>{ const data={app:'Kiz Memory',version:'V3.2.2 UX Fix',format:'9:16',duration:state.duration+'s',note:'Prototype front-end'}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='kiz-memory-recap.json'; a.click(); URL.revokeObjectURL(a.href); });

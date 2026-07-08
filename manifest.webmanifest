@@ -1,11 +1,11 @@
 {
   "name": "Kiz Memory",
   "short_name": "Kiz Memory",
-  "description": "Capture claire, montage automatique et partage après génération.",
+  "description": "Créez des Memories verticales premium pour vos soirées et workshops.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#05030a",
-  "theme_color": "#06020d",
+  "background_color": "#06030a",
+  "theme_color": "#06030a",
   "orientation": "portrait",
   "icons": [
     {

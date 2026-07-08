@@ -1,453 +1,338 @@
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
 
 const state = {
-  previousScreen: "home",
-  currentScreen: "home",
-  mode: "Soirée",
-  duration: 30,
+  screen: 'home',
+  previous: 'home',
   stream: null,
   recorder: null,
-  recordedChunks: [],
-  recordedBlob: null,
-  videoUrl: null,
-  facingMode: "environment",
-  timerInterval: null,
-  recordingStartedAt: 0,
-  torchOn: false,
-  lastShareText: "Kiz Memory — ma vidéo souvenir est prête ✨"
+  chunks: [],
+  url: null,
+  fileName: '',
+  mode: 'Soirée',
+  duration: 30,
+  recording: false,
+  timer: null,
+  startedAt: 0,
+  facingMode: 'environment',
+  torch: false
 };
 
-const screens = $$(".screen");
-const toast = $("#toast");
+const screens = $$('.screen');
+const toast = $('#toast');
+const cameraWrap = $('#cameraWrap');
+const cameraVideo = $('#cameraVideo');
+const recordBtn = $('#recordBtn');
+const timerLabel = $('#timer');
+const input = $('#videoInput');
+const importPreview = $('#importPreview');
+const selectedFile = $('#selectedFile');
+const analyseImportBtn = $('#analyseImportBtn');
+const resultVideo = $('#resultVideo');
+const resultPreview = $('.result-preview');
+
+function showToast(message, delay = 2600) {
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(showToast.t);
+  showToast.t = setTimeout(() => toast.classList.remove('show'), delay);
+}
 
 function go(id) {
-  if (!$("#" + id)) return;
-  state.previousScreen = state.currentScreen;
-  state.currentScreen = id;
-
-  screens.forEach((screen) => {
-    screen.classList.toggle("active", screen.id === id);
-  });
-
-  if (id !== "capture") stopCamera(false);
-  if (id === "capture") startCamera();
-  if (id === "analysis") runAnalysis();
-  if (id === "generation") runGeneration();
-  if (id === "result") prepareResult();
+  if (!$('#' + id)) return;
+  state.previous = state.screen;
+  state.screen = id;
+  screens.forEach((screen) => screen.classList.toggle('active', screen.id === id));
+  if (id !== 'capture') stopCamera(false);
+  if (id === 'capture') startCamera();
+  if (id === 'analysis') runAnalysis();
+  if (id === 'generation') runGeneration();
+  if (id === 'result') prepareResult();
 }
 
-function showToast(message, duration = 2400) {
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove("show"), duration);
-}
-
-$$("[data-go]").forEach((button) => {
-  button.addEventListener("click", () => go(button.dataset.go));
+$$('[data-go]').forEach((el) => {
+  el.addEventListener('click', () => go(el.dataset.go));
 });
 
-$("[data-back]").addEventListener("click", () => go(state.previousScreen || "home"));
-
-$("#startCameraBtn").addEventListener("click", () => go("capture"));
-$("#closeCaptureBtn").addEventListener("click", () => {
-  stopRecordingIfNeeded();
-  stopCamera(true);
-  go("start");
+$$('[data-back]').forEach((el) => {
+  el.addEventListener('click', () => go(state.previous || 'home'));
 });
 
-// Modes
-$$(".mode-tabs button").forEach((button) => {
-  button.addEventListener("click", () => {
-    $$(".mode-tabs button").forEach((b) => b.classList.remove("active"));
-    button.classList.add("active");
-    state.mode = button.dataset.mode;
+$$('.mode-tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('.mode-tabs button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.mode = btn.dataset.mode;
     showToast(`Mode ${state.mode} sélectionné`);
   });
 });
 
-// Camera
+$$('.format-list button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('.format-list button').forEach((b) => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    state.duration = Number(btn.dataset.duration);
+    $('#resultDuration').textContent = `${state.duration}s`;
+  });
+});
+
+$$('[data-action]').forEach((el) => {
+  el.addEventListener('click', async (e) => {
+    const action = el.dataset.action;
+    if (action === 'record') toggleRecord();
+    if (action === 'torch') toggleTorch();
+    if (action === 'switch-camera') switchCamera();
+    if (action === 'native-share') nativeShare();
+    if (action === 'instagram') shareSocial('instagram');
+    if (action === 'tiktok') shareSocial('tiktok');
+    if (action === 'whatsapp') shareSocial('whatsapp');
+    if (action === 'download') downloadRecap();
+    if (action === 'copy-link') copyLink();
+    if (action === 'demo') go('result');
+  });
+});
+
 async function startCamera() {
-  if (state.stream) return;
-
-  const status = $("#cameraStatus");
-  const video = $("#cameraPreview");
-  const stage = $("#cameraStage");
-
-  status.textContent = "Ouverture caméra…";
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast('Caméra non disponible dans ce navigateur.');
+    return;
+  }
 
   try {
+    stopCamera(false);
     state.stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: state.facingMode,
-        width: { ideal: 1080 },
-        height: { ideal: 1920 }
-      },
+      video: { facingMode: state.facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
       audio: true
     });
-
-    video.srcObject = state.stream;
-    await video.play();
-
-    stage.classList.add("live");
-    status.textContent = "Aperçu caméra clair";
+    cameraVideo.srcObject = state.stream;
+    cameraWrap.classList.add('camera-on');
   } catch (error) {
-    status.textContent = "Caméra indisponible";
-    showToast("Autorisez la caméra, ou importez une vidéo.", 3600);
+    cameraWrap.classList.remove('camera-on');
+    showToast('Accès caméra refusé ou indisponible.');
   }
 }
 
-function stopCamera(resetPreview = false) {
+function stopCamera(stopRecording = true) {
+  if (stopRecording && state.recording) stopRecordingNow();
   if (state.stream) {
     state.stream.getTracks().forEach((track) => track.stop());
     state.stream = null;
   }
+  cameraWrap?.classList.remove('camera-on');
+}
 
-  $("#cameraPreview").srcObject = null;
-  $("#cameraStage").classList.remove("live");
-  $("#cameraStatus").textContent = "Caméra prête";
-  state.torchOn = false;
+async function switchCamera() {
+  state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+  showToast('Changement de caméra…');
+  await startCamera();
+}
 
-  if (resetPreview) {
-    $("#recordingBadge").classList.add("hidden");
-    $("#recordBtn").classList.remove("recording");
-    $("#recordTimer").innerHTML = "<i></i>00:00";
+async function toggleTorch() {
+  const track = state.stream?.getVideoTracks?.()[0];
+  if (!track) return showToast('Lancez la caméra avant d’utiliser le flash.');
+
+  const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+  if (!capabilities.torch) {
+    showToast('Torche non supportée par ce navigateur/téléphone.');
+    return;
+  }
+
+  try {
+    state.torch = !state.torch;
+    await track.applyConstraints({ advanced: [{ torch: state.torch }] });
+    showToast(state.torch ? 'Flash activé' : 'Flash désactivé');
+  } catch (error) {
+    showToast('Impossible d’activer le flash ici.');
   }
 }
 
-$("#switchCamBtn").addEventListener("click", async () => {
-  state.facingMode = state.facingMode === "environment" ? "user" : "environment";
-  stopCamera();
-  await startCamera();
-  showToast(state.facingMode === "environment" ? "Caméra arrière" : "Caméra avant");
-});
-
-$("#torchBtn").addEventListener("click", async () => {
-  try {
-    const track = state.stream?.getVideoTracks?.()[0];
-    const capabilities = track?.getCapabilities?.();
-
-    if (!track || !capabilities || !capabilities.torch) {
-      showToast("Flash non disponible sur ce navigateur.");
-      return;
-    }
-
-    state.torchOn = !state.torchOn;
-    await track.applyConstraints({ advanced: [{ torch: state.torchOn }] });
-    showToast(state.torchOn ? "Flash activé" : "Flash désactivé");
-  } catch (error) {
-    showToast("Impossible d’activer le flash ici.");
-  }
-});
-
-$("#recordBtn").addEventListener("click", async () => {
-  if (state.recorder && state.recorder.state === "recording") {
-    stopRecordingIfNeeded();
+function toggleRecord() {
+  if (state.recording) {
+    stopRecordingNow();
     return;
   }
+  startRecordingNow();
+}
 
+function startRecordingNow() {
   if (!state.stream) {
-    await startCamera();
-    if (!state.stream) return;
-  }
-
-  startRecording();
-});
-
-function startRecording() {
-  if (!window.MediaRecorder) {
-    showToast("Enregistrement non supporté. Utilisez l’import vidéo.", 3600);
+    showToast('Caméra non prête. Vous pouvez importer une vidéo.');
     return;
   }
 
-  state.recordedChunks = [];
+  if (!window.MediaRecorder) {
+    showToast('Enregistrement vidéo non supporté dans ce navigateur.');
+    return;
+  }
 
-  const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-    ? "video/webm;codecs=vp9,opus"
-    : "video/webm";
+  state.chunks = [];
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : 'video/webm';
 
   try {
     state.recorder = new MediaRecorder(state.stream, { mimeType });
+    state.recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size) state.chunks.push(event.data);
+    };
+    state.recorder.onstop = () => {
+      const blob = new Blob(state.chunks, { type: mimeType });
+      setVideoUrl(URL.createObjectURL(blob), 'capture-kiz-memory.webm');
+      showToast('Vidéo capturée. Analyse en cours…');
+      setTimeout(() => go('analysis'), 500);
+    };
+    state.recorder.start();
+    state.recording = true;
+    state.startedAt = Date.now();
+    document.body.classList.add('recording');
+    tickTimer();
+    state.timer = setInterval(tickTimer, 250);
   } catch (error) {
-    showToast("Impossible de lancer l’enregistrement.");
-    return;
+    showToast('Impossible de démarrer l’enregistrement.');
   }
-
-  state.recorder.ondataavailable = (event) => {
-    if (event.data && event.data.size > 0) state.recordedChunks.push(event.data);
-  };
-
-  state.recorder.onstop = () => {
-    state.recordedBlob = new Blob(state.recordedChunks, { type: mimeType });
-    setVideoUrl(URL.createObjectURL(state.recordedBlob));
-    stopTimer();
-    $("#recordBtn").classList.remove("recording");
-    $("#recordingBadge").classList.add("hidden");
-    showToast("Vidéo capturée. Analyse en cours…");
-    setTimeout(() => go("analysis"), 700);
-  };
-
-  state.recorder.start();
-  state.recordingStartedAt = Date.now();
-  $("#recordBtn").classList.add("recording");
-  $("#recordingBadge").classList.remove("hidden");
-  startTimer();
 }
 
-function stopRecordingIfNeeded() {
-  if (state.recorder && state.recorder.state === "recording") {
+function stopRecordingNow() {
+  if (state.recorder && state.recorder.state !== 'inactive') {
     state.recorder.stop();
   }
+  state.recording = false;
+  clearInterval(state.timer);
+  document.body.classList.remove('recording');
 }
 
-function startTimer() {
-  stopTimer();
-  state.timerInterval = setInterval(() => {
-    const seconds = Math.floor((Date.now() - state.recordingStartedAt) / 1000);
-    const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
-    const ss = String(seconds % 60).padStart(2, "0");
-    $("#recordTimer").innerHTML = `<i></i>${mm}:${ss}`;
-  }, 250);
+function tickTimer() {
+  const elapsed = Date.now() - state.startedAt;
+  const totalSeconds = Math.floor(elapsed / 1000);
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSeconds % 60).padStart(2, '0');
+  timerLabel.textContent = `${h}:${m}:${s}`;
 }
 
-function stopTimer() {
-  clearInterval(state.timerInterval);
-  state.timerInterval = null;
-}
-
-// Import video
-const fileInput = $("#fileInput");
-const quickFileInput = $("#quickFileInput");
-const dropZone = $("#dropZone");
-
-quickFileInput.addEventListener("change", (event) => handleFileSelection(event.target.files[0], true));
-fileInput.addEventListener("change", (event) => handleFileSelection(event.target.files[0], false));
-dropZone.addEventListener("click", () => fileInput.click());
-
-["dragenter", "dragover"].forEach((eventName) => {
-  dropZone.addEventListener(eventName, (event) => {
-    event.preventDefault();
-    dropZone.classList.add("dragging");
-  });
-});
-
-["dragleave", "drop"].forEach((eventName) => {
-  dropZone.addEventListener(eventName, (event) => {
-    event.preventDefault();
-    dropZone.classList.remove("dragging");
-  });
-});
-
-dropZone.addEventListener("drop", (event) => {
-  const file = event.dataTransfer.files?.[0];
-  handleFileSelection(file, false);
-});
-
-function handleFileSelection(file, fromStart) {
+input.addEventListener('change', () => {
+  const file = input.files?.[0];
   if (!file) return;
-  if (!file.type.startsWith("video/")) {
-    showToast("Choisissez un fichier vidéo.");
-    return;
-  }
-
-  setVideoUrl(URL.createObjectURL(file));
-  state.recordedBlob = file;
-
-  $("#selectedVideoPreview").src = state.videoUrl;
-  $("#selectedFileName").textContent = file.name || "Vidéo importée";
-  $("#selectedFileInfo").textContent = `${formatBytes(file.size)} · prête pour analyse`;
-  $("#selectedVideoBox").classList.remove("hidden");
-  activateAnalyzeButton();
-
-  if (fromStart) go("import");
-}
-
-function setVideoUrl(url) {
-  if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
-  state.videoUrl = url;
-}
-
-function activateAnalyzeButton() {
-  const button = $("#analyzeImportBtn");
-  button.disabled = false;
-  button.classList.remove("disabled");
-}
-
-$("#analyzeImportBtn").addEventListener("click", () => go("analysis"));
-
-// Analysis
-function runAnalysis() {
-  const ring = $("#analysisRing");
-  const percent = $("#analysisPercent");
-  let progress = 0;
-
-  ["#step1", "#step2", "#step3"].forEach((id) => $(id).classList.remove("active"));
-  $("#step1").classList.add("active");
-
-  clearInterval(runAnalysis.timer);
-  ring.style.setProperty("--value", 0);
-  percent.textContent = "0%";
-
-  runAnalysis.timer = setInterval(() => {
-    progress += Math.floor(Math.random() * 8) + 4;
-    if (progress > 100) progress = 100;
-
-    ring.style.setProperty("--value", progress);
-    percent.textContent = `${progress}%`;
-
-    if (progress >= 34) $("#step2").classList.add("active");
-    if (progress >= 72) $("#step3").classList.add("active");
-
-    if (progress === 100) {
-      clearInterval(runAnalysis.timer);
-      setTimeout(() => go("format"), 650);
-    }
-  }, 190);
-}
-
-// Format
-$$(".format-list button").forEach((button) => {
-  button.addEventListener("click", () => {
-    $$(".format-list button").forEach((b) => b.classList.remove("active"));
-    button.classList.add("active");
-    state.duration = Number(button.dataset.duration);
-    $("#finalDurationLabel").textContent = `${state.duration}s`;
-  });
+  setVideoUrl(URL.createObjectURL(file), file.name);
+  importPreview.src = state.url;
+  $('#fileTitle').textContent = file.name;
+  $('#fileMeta').textContent = `${formatBytes(file.size)} · prêt pour analyse`;
+  selectedFile.classList.remove('hidden');
+  analyseImportBtn.disabled = false;
+  analyseImportBtn.classList.remove('disabled');
 });
 
-$("#goGenerateBtn").addEventListener("click", () => go("generation"));
+analyseImportBtn.addEventListener('click', () => go('analysis'));
+
+function setVideoUrl(url, name) {
+  if (state.url && state.url.startsWith('blob:')) URL.revokeObjectURL(state.url);
+  state.url = url;
+  state.fileName = name || 'kiz-memory-video';
+}
+
+function runAnalysis() {
+  let progress = 0;
+  const ring = $('#analysisRing');
+  const label = $('#analysisPercent');
+  $('#step2').classList.remove('done');
+  $('#step3').classList.remove('done');
+
+  const t = setInterval(() => {
+    progress += Math.floor(Math.random() * 8) + 4;
+    if (progress >= 100) progress = 100;
+    ring.style.setProperty('--p', progress);
+    label.textContent = `${progress}%`;
+    if (progress > 38) $('#step2').classList.add('done');
+    if (progress > 76) $('#step3').classList.add('done');
+    if (progress === 100) {
+      clearInterval(t);
+      setTimeout(() => go('format'), 550);
+    }
+  }, 140);
+}
 
 function runGeneration() {
-  const bar = $("#generationBar");
-  const text = $("#generationText");
-  let progress = 0;
-  const messages = [
-    "Sélection des meilleurs moments…",
-    "Recadrage vertical 9:16…",
-    "Transitions élégantes…",
-    "Préparation du partage…"
-  ];
-
-  clearInterval(runGeneration.timer);
-  bar.style.width = "0%";
-  text.textContent = "Montage automatique…";
-
-  runGeneration.timer = setInterval(() => {
-    progress += Math.floor(Math.random() * 10) + 5;
-    if (progress > 100) progress = 100;
-    bar.style.width = `${progress}%`;
-
-    const index = Math.min(Math.floor(progress / 26), messages.length - 1);
-    text.textContent = messages[index];
-
-    if (progress === 100) {
-      clearInterval(runGeneration.timer);
-      setTimeout(() => go("result"), 650);
+  const lines = ['Préparation du format vertical…', 'Sélection des meilleurs moments…', 'Montage automatique…', 'Finalisation premium…'];
+  let i = 0;
+  $('#genText').textContent = lines[0];
+  const t = setInterval(() => {
+    i += 1;
+    $('#genText').textContent = lines[i] || 'Memory prête ✨';
+    if (i >= lines.length) {
+      clearInterval(t);
+      setTimeout(() => go('result'), 700);
     }
-  }, 220);
+  }, 900);
 }
 
 function prepareResult() {
-  $("#finalDurationLabel").textContent = `${state.duration}s`;
-  const finalPreview = $("#finalPreview");
-  const finalVideo = $("#finalVideo");
-
-  if (state.videoUrl) {
-    finalVideo.src = state.videoUrl;
-    finalPreview.classList.add("has-video");
+  $('#resultDuration').textContent = `${state.duration}s`;
+  if (state.url) {
+    resultVideo.src = state.url;
+    resultPreview.classList.add('has-video');
   } else {
-    finalVideo.removeAttribute("src");
-    finalPreview.classList.remove("has-video");
+    resultPreview.classList.remove('has-video');
   }
 }
 
-// Sharing
-$("#shareBtn").addEventListener("click", async () => {
-  await nativeShare("Votre Memory est prête ✨", state.lastShareText);
-});
-
-$("#instagramBtn").addEventListener("click", async () => {
+async function nativeShare() {
+  const text = `Kiz Memory ✨ Ma Memory ${state.duration}s est prête.`;
   if (navigator.share) {
-    await nativeShare("Partager sur Instagram", "Téléchargez votre Memory puis choisissez Instagram dans le partage.");
+    try {
+      await navigator.share({ title: 'Kiz Memory', text, url: location.href });
+    } catch (_) {}
   } else {
-    window.open("https://www.instagram.com/", "_blank");
-  }
-});
-
-$("#tiktokBtn").addEventListener("click", async () => {
-  if (navigator.share) {
-    await nativeShare("Partager sur TikTok", "Téléchargez votre Memory puis choisissez TikTok dans le partage.");
-  } else {
-    window.open("https://www.tiktok.com/upload", "_blank");
-  }
-});
-
-$("#whatsappBtn").addEventListener("click", () => {
-  const text = encodeURIComponent("Ma Memory Kizomba est prête ✨");
-  window.open(`https://wa.me/?text=${text}`, "_blank");
-});
-
-async function nativeShare(title, text) {
-  try {
-    if (!navigator.share) {
-      await copyCurrentLink();
-      showToast("Lien copié. Partage manuel disponible.");
-      return;
-    }
-
-    await navigator.share({ title, text, url: location.href });
-  } catch (error) {
-    if (error.name !== "AbortError") showToast("Partage indisponible ici.");
+    copyLink();
   }
 }
 
-$("#downloadBtn").addEventListener("click", () => {
-  if (state.recordedBlob && state.recordedBlob.type.startsWith("video/")) {
-    downloadBlob(state.recordedBlob, `kiz-memory-capture-${Date.now()}.webm`);
+function shareSocial(type) {
+  const text = encodeURIComponent(`Kiz Memory ✨ Ma Memory ${state.duration}s est prête : ${location.href}`);
+  if (type === 'whatsapp') {
+    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
     return;
   }
+  if (navigator.share) {
+    nativeShare();
+    return;
+  }
+  if (type === 'instagram') window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
+  if (type === 'tiktok') window.open('https://www.tiktok.com/upload', '_blank', 'noopener,noreferrer');
+  showToast('Utilisez le bouton Partager pour envoyer vers l’application voulue.');
+}
 
+async function copyLink() {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    showToast('Lien copié ✅');
+  } catch (error) {
+    showToast('Impossible de copier le lien.');
+  }
+}
+
+function downloadRecap() {
   const data = {
-    app: "Kiz Memory V3",
-    ux: "capture claire, flow simplifié, partage après génération",
-    format: "vertical 9:16",
-    duration: `${state.duration}s`,
+    app: 'Kiz Memory',
+    version: 'V3.1 Brand Lock',
     mode: state.mode,
-    note: "Prototype front-end. Le montage IA réel nécessite un moteur vidéo/serveur."
+    duration: `${state.duration}s`,
+    format: 'Vertical 9:16',
+    source: state.fileName || 'Démo / prototype',
+    note: 'Prototype front-end. Le vrai montage MP4 automatique nécessite une étape FFmpeg ou serveur vidéo.'
   };
-
-  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "kiz-memory-recap.json");
-});
-
-function downloadBlob(blob, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'kiz-memory-recap.json';
+  a.click();
   URL.revokeObjectURL(url);
 }
 
-async function copyCurrentLink() {
-  try {
-    await navigator.clipboard.writeText(location.href);
-  } catch (error) {
-    // Clipboard can fail on some browsers.
-  }
-}
-
 function formatBytes(bytes) {
-  if (!bytes) return "0 octet";
-  const units = ["octets", "Ko", "Mo", "Go"];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / Math.pow(1024, index);
-  return `${value.toFixed(index ? 1 : 0)} ${units[index]}`;
+  if (!bytes) return '0 octet';
+  const units = ['octets', 'Ko', 'Mo', 'Go'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(i ? 1 : 0)} ${units[i]}`;
 }
-
-window.addEventListener("beforeunload", () => {
-  if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
-  stopCamera(false);
-});

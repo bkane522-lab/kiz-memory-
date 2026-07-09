@@ -3,21 +3,29 @@ const state = {
   recorder: null,
   chunks: [],
   videoUrl: null,
+  sourceFileName: '',
+  montageBlob: null,
+  montageUrl: null,
   duration: 15,
   timer: null,
   seconds: 0,
   facingMode: 'environment',
-  analysing: false
+  analysing: false,
+  generating: false
 };
 
 const pages = [...document.querySelectorAll('.page')];
 const cameraVideo = document.getElementById('cameraVideo');
-const cameraPreview = document.querySelector('.camera-preview');
+const cameraPreview = document.getElementById('cameraPreview');
 const cameraEmpty = document.getElementById('cameraEmpty');
 const recTime = document.getElementById('recTime');
 const recordBtn = document.getElementById('recordBtn');
 const resultVideo = document.getElementById('resultVideo');
 const resultCard = document.getElementById('resultCard');
+const fileInput = document.getElementById('fileInput');
+const fileInputCamera = document.getElementById('fileInputCamera');
+const renderBar = document.getElementById('renderBar');
+const generateStatus = document.getElementById('generateStatus');
 
 function go(id){
   pages.forEach(page => page.classList.toggle('active', page.id === id));
@@ -27,9 +35,38 @@ function go(id){
   if(id !== 'capture' && id !== 'analysis') stopRecordingTimerOnly();
 }
 
-document.querySelectorAll('[data-go]').forEach(btn => btn.addEventListener('click', () => go(btn.dataset.go)));
+document.querySelectorAll('[data-go]').forEach(btn => {
+  btn.addEventListener('click', () => go(btn.dataset.go));
+});
 
-document.getElementById('startCameraBtn').addEventListener('click', async () => {
+// ENTRY IMPORT
+const openFileBtn = document.getElementById('openFileBtn');
+const openFileCameraBtn = document.getElementById('openFileCameraBtn');
+openFileBtn.addEventListener('click', () => fileInput.click());
+openFileCameraBtn.addEventListener('click', () => fileInputCamera.click());
+fileInput.addEventListener('change', e => handleFile(e.target.files?.[0]));
+fileInputCamera.addEventListener('change', e => handleFile(e.target.files?.[0]));
+
+function handleFile(file){
+  if(!file) return;
+  setVideoUrl(URL.createObjectURL(file));
+  state.sourceFileName = file.name || 'video-importee';
+  state.montageBlob = null;
+  if(state.montageUrl) URL.revokeObjectURL(state.montageUrl);
+  state.montageUrl = null;
+  stopCamera();
+
+  const box = document.getElementById('importState');
+  box.classList.add('ready');
+  box.innerHTML = `<span>✅</span><p><b>${escapeHtml(state.sourceFileName)}</b><br>Vidéo importée. Analyse automatique...</p>`;
+  toast('Vidéo importée. Analyse automatique lancée.');
+
+  setTimeout(() => go('analysis'), 650);
+}
+
+// CAMERA
+const startCameraBtn = document.getElementById('startCameraBtn');
+startCameraBtn.addEventListener('click', async () => {
   await startCamera();
   go('capture');
 });
@@ -43,12 +80,15 @@ async function startCamera(){
     cameraEmpty.innerHTML = '';
   }catch(e){
     cameraPreview.classList.remove('live');
-    cameraEmpty.innerHTML = '<span>📷</span><b>Caméra refusée</b>';
-    toast('Caméra refusée. Vous pouvez importer une vidéo.');
+    cameraEmpty.innerHTML = '<span>📷</span><b>Caméra refusée</b><small>Importez une vidéo depuis la galerie.</small>';
+    toast('Caméra refusée. Utilisez Importer une vidéo.');
   }
 }
 function stopCamera(){
-  if(state.stream){ state.stream.getTracks().forEach(track => track.stop()); state.stream = null; }
+  if(state.stream){
+    state.stream.getTracks().forEach(track => track.stop());
+    state.stream = null;
+  }
 }
 
 document.getElementById('switchCamBtn').addEventListener('click', async () => {
@@ -59,7 +99,7 @@ document.getElementById('switchCamBtn').addEventListener('click', async () => {
 document.getElementById('torchBtn').addEventListener('click', async () => {
   const track = state.stream?.getVideoTracks?.()[0];
   const caps = track?.getCapabilities?.();
-  if(!track || !caps || !caps.torch){ toast('Torche non disponible ici.'); return; }
+  if(!track || !caps || !caps.torch){ toast('Torche non disponible sur ce navigateur.'); return; }
   try{
     const current = !!track.getSettings().torch;
     await track.applyConstraints({ advanced: [{ torch: !current }] });
@@ -76,44 +116,46 @@ function startRecording(){
   if(!state.stream){ toast('Lancez la caméra ou importez une vidéo.'); return; }
   try{
     state.chunks = [];
-    const options = pickMimeType() ? { mimeType: pickMimeType() } : undefined;
-    state.recorder = new MediaRecorder(state.stream, options);
+    const mime = pickMimeType();
+    state.recorder = new MediaRecorder(state.stream, mime ? { mimeType: mime } : undefined);
     state.recorder.ondataavailable = e => { if(e.data.size) state.chunks.push(e.data); };
     state.recorder.onstop = () => {
       const blob = new Blob(state.chunks, { type: state.recorder.mimeType || 'video/webm' });
       setVideoUrl(URL.createObjectURL(blob));
+      state.sourceFileName = 'capture-kiz-memory.webm';
+      state.montageBlob = null;
+      if(state.montageUrl) URL.revokeObjectURL(state.montageUrl);
+      state.montageUrl = null;
       stopTimer();
       recordBtn.classList.remove('recording');
+      toast('Capture terminée. Analyse automatique lancée.');
       go('analysis');
     };
     state.recorder.start();
     recordBtn.classList.add('recording');
     startTimer();
-  }catch(e){ toast('Enregistrement non supporté. Importez une vidéo.'); }
+  }catch(e){ toast('Enregistrement non supporté ici. Importez une vidéo.'); }
 }
 function stopRecording(){ if(state.recorder?.state === 'recording') state.recorder.stop(); }
-function pickMimeType(){ return ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || ''; }
+function pickMimeType(){
+  if(!window.MediaRecorder) return '';
+  return ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
 function startTimer(){
   stopTimer(); state.seconds = 0; recTime.textContent = '00:00';
-  state.timer = setInterval(() => { state.seconds++; const m = String(Math.floor(state.seconds/60)).padStart(2,'0'); const s = String(state.seconds%60).padStart(2,'0'); recTime.textContent = `${m}:${s}`; }, 1000);
+  state.timer = setInterval(() => {
+    state.seconds++;
+    const m = String(Math.floor(state.seconds/60)).padStart(2,'0');
+    const s = String(state.seconds%60).padStart(2,'0');
+    recTime.textContent = `${m}:${s}`;
+  }, 1000);
 }
 function stopTimer(){ clearInterval(state.timer); state.timer = null; }
 function stopRecordingTimerOnly(){ if(!state.recorder || state.recorder.state !== 'recording') stopTimer(); }
 
-function handleFile(file){
-  if(!file) return;
-  setVideoUrl(URL.createObjectURL(file));
-  stopCamera();
-  go('analysis');
-}
-document.getElementById('fileInput').addEventListener('change', e => handleFile(e.target.files?.[0]));
-document.getElementById('fileInputCamera').addEventListener('change', e => handleFile(e.target.files?.[0]));
-document.getElementById('useDemoBtn').addEventListener('click', () => go('analysis'));
-
 function setVideoUrl(url){
   if(state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.videoUrl = url;
-  resultVideo.src = url;
 }
 
 document.querySelectorAll('.camera-modes button').forEach(btn => {
@@ -123,6 +165,7 @@ document.querySelectorAll('.camera-modes button').forEach(btn => {
   });
 });
 
+// ANALYSIS
 function startAnalysis(){
   if(state.analysing) return;
   state.analysing = true;
@@ -131,6 +174,8 @@ function startAnalysis(){
   const step1 = document.getElementById('step1');
   const step2 = document.getElementById('step2');
   const step3 = document.getElementById('step3');
+  const subtitle = document.getElementById('analysisSubtitle');
+  subtitle.textContent = state.videoUrl ? 'Vidéo reçue. Kiz Memory prépare un récap vertical automatique.' : 'Mode démo. Kiz Memory prépare un récap vertical.';
   let p = 0;
   const c = 326.7;
   circle.style.strokeDashoffset = c;
@@ -141,52 +186,237 @@ function startAnalysis(){
     if(p > 100) p = 100;
     circle.style.strokeDashoffset = c - (c * p / 100);
     text.textContent = `${p}%`;
-    if(p >= 38) step2.classList.add('active');
-    if(p >= 72) step3.classList.add('active');
+    if(p >= 35) step2.classList.add('active');
+    if(p >= 70) step3.classList.add('active');
     if(p === 100){
       clearInterval(interval);
       state.analysing = false;
       setTimeout(() => go('format'), 450);
     }
-  }, 75);
+  }, 72);
 }
 
+// FORMAT
+const durationLabel = document.getElementById('durationLabel');
 document.querySelectorAll('.format-list button').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.format-list button').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     state.duration = Number(btn.dataset.duration);
-    document.getElementById('durationLabel').textContent = `${state.duration}s`;
+    durationLabel.textContent = `${state.duration}s`;
   });
 });
-function startGenerate(){ setTimeout(() => go('result'), 1900); }
+
+// GENERATE REAL BETA MONTAGE
+async function startGenerate(){
+  if(state.generating) return;
+  state.generating = true;
+  renderBar.style.width = '0%';
+  generateStatus.textContent = 'Préparation du rendu vertical...';
+
+  try{
+    if(state.videoUrl && window.MediaRecorder && HTMLCanvasElement.prototype.captureStream){
+      state.montageBlob = null;
+      if(state.montageUrl){ URL.revokeObjectURL(state.montageUrl); state.montageUrl = null; }
+      const blob = await createVerticalMontage(state.videoUrl, state.duration, (progress, message) => {
+        renderBar.style.width = `${Math.round(progress * 100)}%`;
+        if(message) generateStatus.textContent = message;
+      });
+      state.montageBlob = blob;
+      state.montageUrl = URL.createObjectURL(blob);
+      generateStatus.textContent = 'Montage terminé.';
+      renderBar.style.width = '100%';
+      setTimeout(() => { state.generating = false; go('result'); }, 450);
+    }else{
+      await fakeRender();
+      state.generating = false;
+      go('result');
+    }
+  }catch(e){
+    console.warn(e);
+    await fakeRender('Rendu vidéo limité sur ce navigateur. Aperçu de la vidéo source.');
+    state.generating = false;
+    go('result');
+  }
+}
+
+async function fakeRender(message = 'Prévisualisation prête.'){
+  for(let i=0;i<=100;i+=5){
+    renderBar.style.width = `${i}%`;
+    generateStatus.textContent = i < 35 ? 'Sélection des moments...' : i < 70 ? 'Recadrage vertical...' : message;
+    await wait(55);
+  }
+}
+
+async function createVerticalMontage(src, targetSeconds, onProgress){
+  const video = document.createElement('video');
+  video.src = src;
+  video.muted = true;
+  video.playsInline = true;
+  video.crossOrigin = 'anonymous';
+  video.preload = 'auto';
+  await once(video, 'loadedmetadata', 10000);
+
+  const sourceDuration = isFinite(video.duration) && video.duration > 0 ? video.duration : targetSeconds;
+  const outputSeconds = Math.max(5, Math.min(targetSeconds, Math.ceil(sourceDuration)));
+  const canvas = document.createElement('canvas');
+  canvas.width = 720;
+  canvas.height = 1280;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const stream = canvas.captureStream(30);
+  const mime = pickMimeType() || 'video/webm';
+  const recorder = new MediaRecorder(stream, { mimeType: mime });
+  const chunks = [];
+  recorder.ondataavailable = e => { if(e.data.size) chunks.push(e.data); };
+
+  const done = new Promise(resolve => recorder.onstop = resolve);
+  recorder.start(250);
+
+  const segmentCount = outputSeconds <= 15 ? 3 : outputSeconds <= 30 ? 4 : 5;
+  const segmentSeconds = outputSeconds / segmentCount;
+  const starts = buildSegmentStarts(sourceDuration, segmentCount, segmentSeconds);
+  let rendered = 0;
+  let raf = 0;
+
+  for(let i=0; i<segmentCount; i++){
+    const start = starts[i];
+    onProgress(rendered / outputSeconds, i === 0 ? 'Sélection des temps forts...' : 'Assemblage des meilleurs moments...');
+    await seekTo(video, start);
+    await safePlay(video);
+
+    const segmentStartTime = performance.now();
+    await new Promise(resolve => {
+      const draw = () => {
+        drawVideoCover(ctx, video, canvas.width, canvas.height);
+        drawOverlay(ctx, canvas.width, canvas.height);
+        const elapsed = (performance.now() - segmentStartTime) / 1000;
+        rendered = Math.min(outputSeconds, i * segmentSeconds + elapsed);
+        onProgress(rendered / outputSeconds, rendered < outputSeconds * .7 ? 'Recadrage vertical 9:16...' : 'Finalisation du montage...');
+        if(elapsed >= segmentSeconds || video.ended){
+          resolve();
+        }else{
+          raf = requestAnimationFrame(draw);
+        }
+      };
+      draw();
+    });
+    cancelAnimationFrame(raf);
+    video.pause();
+  }
+
+  recorder.stop();
+  await done;
+  onProgress(1, 'Montage terminé.');
+  return new Blob(chunks, { type: recorder.mimeType || 'video/webm' });
+}
+
+function buildSegmentStarts(sourceDuration, count, segmentSeconds){
+  if(sourceDuration <= segmentSeconds * count) return Array.from({length: count}, (_, i) => Math.max(0, i * segmentSeconds));
+  const maxStart = Math.max(0, sourceDuration - segmentSeconds - .5);
+  if(count === 1) return [0];
+  return Array.from({length: count}, (_, i) => Math.min(maxStart, Math.max(0, (maxStart * i) / (count - 1))));
+}
+
+function drawVideoCover(ctx, video, w, h){
+  const vw = video.videoWidth || 16;
+  const vh = video.videoHeight || 9;
+  const scale = Math.max(w / vw, h / vh);
+  const dw = vw * scale;
+  const dh = vh * scale;
+  const dx = (w - dw) / 2;
+  const dy = (h - dh) / 2;
+  ctx.fillStyle = '#05030a';
+  ctx.fillRect(0,0,w,h);
+  ctx.drawImage(video, dx, dy, dw, dh);
+}
+
+function drawOverlay(ctx, w, h){
+  const grad = ctx.createLinearGradient(0, h * .58, 0, h);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,.62)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  ctx.fillStyle = 'rgba(255, 220, 110, .92)';
+  ctx.font = '600 28px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.letterSpacing = '3px';
+  ctx.fillText('KIZ MEMORY', w/2, h - 82);
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.font = '500 18px system-ui, sans-serif';
+  ctx.fillText('DANCE · REMEMBER · FOREVER', w/2, h - 50);
+}
+
+function safePlay(video){
+  const p = video.play();
+  return p && typeof p.then === 'function' ? p.catch(() => {}) : Promise.resolve();
+}
+function seekTo(video, time){
+  return new Promise(resolve => {
+    const onSeeked = () => { video.removeEventListener('seeked', onSeeked); resolve(); };
+    video.addEventListener('seeked', onSeeked);
+    video.currentTime = Math.min(Math.max(0, time), Math.max(0, (video.duration || 1) - .2));
+    setTimeout(resolve, 1200);
+  });
+}
+function once(el, event, timeout=8000){
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`Timeout ${event}`)), timeout);
+    el.addEventListener(event, () => { clearTimeout(t); resolve(); }, { once: true });
+  });
+}
+function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// RESULT
 function syncResult(){
-  document.getElementById('durationLabel').textContent = `${state.duration}s`;
-  resultCard.classList.toggle('has-video', !!state.videoUrl);
+  durationLabel.textContent = `${state.duration}s`;
+  const finalUrl = state.montageUrl || state.videoUrl;
+  resultCard.classList.toggle('has-video', !!finalUrl);
+  if(finalUrl) resultVideo.src = finalUrl;
+  document.getElementById('resultType').textContent = state.montageUrl ? 'Vidéo générée' : 'Aperçu';
 }
 
 document.getElementById('playResultBtn').addEventListener('click', () => {
-  if(!state.videoUrl){ toast('Démo visuelle : filmez ou importez une vidéo pour lire un vrai aperçu.'); return; }
+  if(!resultVideo.src){ toast('Importez une vidéo pour obtenir un vrai aperçu.'); return; }
   resultVideo.paused ? resultVideo.play() : resultVideo.pause();
 });
+
 async function nativeShare(text='Ma Memory Kiz Memory est prête ✨'){
   try{
+    if(state.montageBlob && navigator.canShare){
+      const file = new File([state.montageBlob], 'kiz-memory.webm', { type: state.montageBlob.type || 'video/webm' });
+      if(navigator.canShare({ files: [file] })){ await navigator.share({ title:'Kiz Memory', text, files:[file] }); return; }
+    }
     if(navigator.share) await navigator.share({ title:'Kiz Memory', text, url:location.href });
     else { await navigator.clipboard.writeText(location.href); toast('Lien copié.'); }
   }catch(e){}
 }
 document.getElementById('shareNative').addEventListener('click', () => nativeShare());
-document.getElementById('shareInstagram').addEventListener('click', () => nativeShare('Prêt à publier sur Instagram ✨'));
-document.getElementById('shareTiktok').addEventListener('click', () => nativeShare('Prêt à publier sur TikTok ✨'));
+document.getElementById('shareInstagram').addEventListener('click', () => nativeShare('Memory prête pour Instagram ✨'));
+document.getElementById('shareTiktok').addEventListener('click', () => nativeShare('Memory prête pour TikTok ✨'));
 document.getElementById('shareWhatsapp').addEventListener('click', () => { location.href = `https://wa.me/?text=${encodeURIComponent('Ma Memory Kiz Memory est prête ✨ ' + location.href)}`; });
-document.getElementById('downloadBtn').addEventListener('click', () => {
-  const data = { app:'Kiz Memory', version:'V3.5 UX Flow Clean', format:'Vertical 9:16', duration:`${state.duration}s`, note:'Prototype front-end. La vraie génération vidéo MP4 sera ajoutée ensuite.' };
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'kiz-memory-recap.json'; a.click(); URL.revokeObjectURL(url);
+
+document.getElementById('downloadVideoBtn').addEventListener('click', () => {
+  if(state.montageBlob){ downloadBlob(state.montageBlob, 'kiz-memory-montage.webm'); }
+  else if(state.videoUrl){ toast('Montage non généré sur ce navigateur. Téléchargement de la source impossible depuis cet aperçu.'); }
+  else toast('Aucune vidéo générée pour le moment.');
 });
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
 function toast(message){
   document.querySelector('.toast')?.remove();
-  const el = document.createElement('div'); el.className = 'toast'; el.textContent = message;
-  document.body.appendChild(el); setTimeout(()=>el.remove(), 2300);
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[char]));
 }

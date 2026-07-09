@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Kiz Memory — V3.5 UX Flow Clean</title>
-  <meta name="description" content="Kiz Memory transforme vos soirées et workshops en récaps verticaux prêts à partager." />
+  <title>Kiz Memory — V3.6 Auto Montage Beta</title>
+  <meta name="description" content="Kiz Memory transforme une vidéo de danse en récap vertical 9:16 prêt à partager." />
   <meta name="theme-color" content="#08040f" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.png" />
@@ -17,8 +17,9 @@
       <span><i></i><i></i><i></i></span>
     </div>
 
+    <!-- 1. ACCUEIL -->
     <section class="page page-home active" id="home">
-      <div class="lux-bg" aria-hidden="true"></div>
+      <div class="bg-orbits" aria-hidden="true"></div>
       <div class="home-lockup">
         <img class="mark" src="assets/logo-mark.png" alt="Kiz Memory" />
         <img class="wordmark" src="assets/wordmark.png" alt="Kiz Memory — Dance Remember Forever" />
@@ -27,21 +28,24 @@
       <button class="mini-link" data-go="result">Voir une démo</button>
     </section>
 
-    <section class="page page-entry" id="entry">
+    <!-- 2. CHOIX ENTREE -->
+    <section class="page" id="entry">
       <header class="topnav">
         <button class="round" data-go="home" aria-label="Retour">‹</button>
-        <h1>Nouvelle Memory</h1>
+        <div>
+          <p class="step">Étape 1/5</p>
+          <h1>Nouvelle Memory</h1>
+        </div>
         <button class="round" data-go="privacy" aria-label="Confidentialité">🛡</button>
       </header>
 
-      <div class="center-title compact">
-        <p class="eyebrow">Étape 1 sur 5</p>
+      <div class="headline">
         <h2>Choisissez votre entrée</h2>
-        <p>Filmez maintenant ou importez une vidéo. Le montage vient après.</p>
+        <p>Un seul choix maintenant. Le montage automatique vient ensuite.</p>
       </div>
 
       <div class="choice-stack">
-        <button class="entry-card featured" id="startCameraBtn">
+        <button class="entry-card primary-card" id="startCameraBtn">
           <span class="entry-icon">📷</span>
           <span>
             <strong>Filmer maintenant</strong>
@@ -50,23 +54,24 @@
           <em>›</em>
         </button>
 
-        <label class="entry-card">
+        <button class="entry-card" id="openFileBtn">
           <span class="entry-icon">⬆</span>
           <span>
             <strong>Importer une vidéo</strong>
-            <small>Depuis votre galerie, MP4 ou MOV.</small>
+            <small>MP4/MOV depuis votre galerie. Analyse auto après import.</small>
           </span>
           <em>›</em>
-          <input id="fileInput" type="file" accept="video/*" hidden />
-        </label>
+        </button>
+        <input id="fileInput" type="file" accept="video/*" hidden />
       </div>
 
-      <div class="privacy-note">
+      <div class="auto-note" id="importState">
         <span>🔒</span>
-        <p>Prototype : l’analyse est simulée. Vos fichiers restent dans le navigateur.</p>
+        <p>Vos fichiers restent dans le navigateur. Cette V3.6 crée un montage vertical bêta en WebM.</p>
       </div>
     </section>
 
+    <!-- 3. CAPTURE -->
     <section class="page page-camera" id="capture">
       <header class="camera-top">
         <button class="round" data-go="entry" aria-label="Fermer">×</button>
@@ -74,11 +79,12 @@
         <button class="round" id="torchBtn" aria-label="Torche">⚡</button>
       </header>
 
-      <div class="camera-preview">
+      <div class="camera-preview" id="cameraPreview">
         <video id="cameraVideo" playsinline muted autoplay></video>
         <div class="camera-placeholder" id="cameraEmpty">
           <span>📷</span>
           <b>Caméra prête</b>
+          <small>Appuyez sur REC pour filmer</small>
         </div>
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
       </div>
@@ -92,25 +98,23 @@
       <div class="record-zone">
         <button class="small-btn" id="switchCamBtn" aria-label="Changer caméra">↻</button>
         <button class="record-btn" id="recordBtn" aria-label="Enregistrer"><span></span></button>
-        <label class="small-btn" aria-label="Importer">
-          ⬆
-          <input id="fileInputCamera" type="file" accept="video/*" hidden />
-        </label>
+        <button class="small-btn" id="openFileCameraBtn" aria-label="Importer">⬆</button>
+        <input id="fileInputCamera" type="file" accept="video/*" hidden />
       </div>
 
-      <p class="camera-help">Appuyez pour commencer. Appuyez encore pour terminer.</p>
-      <button class="soft-btn" id="useDemoBtn">Continuer avec une vidéo démo</button>
+      <p class="camera-help">REC puis stop : l’analyse démarre automatiquement.</p>
     </section>
 
-    <section class="page page-analysis" id="analysis">
+    <!-- 4. ANALYSE -->
+    <section class="page" id="analysis">
       <header class="topnav minimal">
         <button class="round" data-go="entry" aria-label="Retour">‹</button>
       </header>
 
       <div class="analysis-block">
-        <p class="eyebrow">Étape 2 sur 5</p>
+        <p class="step">Étape 2/5</p>
         <h2>Analyse en cours...</h2>
-        <p>On repère les meilleurs moments et on prépare votre montage vertical.</p>
+        <p id="analysisSubtitle">On repère les meilleurs moments et on prépare le récap vertical.</p>
 
         <div class="progress-ring">
           <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -121,28 +125,31 @@
         </div>
 
         <ol class="steps">
-          <li class="active" id="step1"><span>✓</span> Analyse vidéo</li>
-          <li id="step2"><span>2</span> Détection des temps forts</li>
-          <li id="step3"><span>3</span> Préparation du montage</li>
+          <li class="active" id="step1"><span>✓</span> Vidéo reçue</li>
+          <li id="step2"><span>2</span> Sélection automatique</li>
+          <li id="step3"><span>3</span> Préparation montage</li>
         </ol>
       </div>
     </section>
 
-    <section class="page page-format" id="format">
+    <!-- 5. FORMAT -->
+    <section class="page" id="format">
       <header class="topnav">
         <button class="round" data-go="analysis" aria-label="Retour">‹</button>
-        <h1>Format</h1>
+        <div>
+          <p class="step">Étape 3/5</p>
+          <h1>Format</h1>
+        </div>
         <span></span>
       </header>
 
-      <div class="center-title compact">
-        <p class="eyebrow">Étape 3 sur 5</p>
-        <h2>Choisissez le format</h2>
-        <p>On garde l’app 100% verticale pour les réseaux.</p>
+      <div class="headline small">
+        <h2>Choisissez la durée</h2>
+        <p>Le rendu reste vertical 9:16 pour Reels, TikTok, Shorts et WhatsApp.</p>
       </div>
 
       <div class="format-list">
-        <button class="selected" data-duration="15"><span></span><b>Story 15s</b><small>Teaser rapide</small><em>9:16</em></button>
+        <button class="selected" data-duration="15"><span></span><b>Story 15s</b><small>Rapide et impactant</small><em>9:16</em></button>
         <button data-duration="30"><span></span><b>Reel 30s</b><small>Format conseillé</small><em>9:16</em></button>
         <button data-duration="60"><span></span><b>Aftermovie 60s</b><small>Plus émotionnel</small><em>9:16</em></button>
       </div>
@@ -150,19 +157,26 @@
       <button class="gold-btn bottom-cta" data-go="generate">Générer la Memory</button>
     </section>
 
+    <!-- 6. GENERATION -->
     <section class="page page-generate" id="generate">
       <div class="generate-block">
-        <p class="eyebrow">Étape 4 sur 5</p>
-        <h2>Votre Memory est<br>en génération</h2>
-        <p>Montage automatique, format vertical 9:16.</p>
+        <p class="step">Étape 4/5</p>
+        <h2>Montage automatique</h2>
+        <p id="generateStatus">Préparation du rendu vertical...</p>
         <div class="loader"><img src="assets/logo-mark.png" alt="" /></div>
+        <div class="render-progress"><i id="renderBar"></i></div>
+        <small id="renderHint">Cette bêta peut prendre quelques secondes. Ne fermez pas la page.</small>
       </div>
     </section>
 
-    <section class="page page-result" id="result">
+    <!-- 7. RESULTAT -->
+    <section class="page" id="result">
       <header class="topnav">
         <button class="round" data-go="format" aria-label="Retour">‹</button>
-        <h1>Memory prête</h1>
+        <div>
+          <p class="step">Étape 5/5</p>
+          <h1>Memory prête</h1>
+        </div>
         <button class="round" data-go="home" aria-label="Accueil">⌂</button>
       </header>
 
@@ -172,11 +186,11 @@
         <button class="play" id="playResultBtn">▶</button>
         <div class="result-info">
           <b>KIZOMBA NIGHT</b>
-          <small>Vertical 9:16 · <span id="durationLabel">15s</span></small>
+          <small><span id="resultType">Montage bêta</span> · <span id="durationLabel">15s</span> · 9:16</small>
         </div>
       </div>
 
-      <p class="share-label">Étape 5 sur 5 · Partager</p>
+      <p class="share-label">Partager votre Memory</p>
       <div class="share-grid">
         <button id="shareInstagram"><span>◎</span><b>Instagram</b></button>
         <button id="shareTiktok"><span>♪</span><b>TikTok</b></button>
@@ -184,7 +198,8 @@
         <button id="shareNative"><span>•••</span><b>Plus</b></button>
       </div>
 
-      <button class="soft-btn" id="downloadBtn">Télécharger la fiche</button>
+      <button class="gold-outline" id="downloadVideoBtn">Télécharger la vidéo générée</button>
+      <button class="soft-btn" data-go="entry">Créer une autre Memory</button>
     </section>
 
     <section class="page" id="privacy">
@@ -195,10 +210,11 @@
       </header>
       <div class="info-card">
         <b>Contrôle avant partage</b>
-        <p>La vraie version devra intégrer le floutage, la validation des clips et les règles de consentement avant diffusion.</p>
+        <p>La vraie version devra intégrer le floutage, la validation des clips et les règles de consentement avant diffusion. Cette bêta reste locale dans votre navigateur.</p>
       </div>
     </section>
   </main>
+
   <script src="app.js"></script>
 </body>
 </html>

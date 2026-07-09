@@ -1,13 +1,13 @@
 {
   "name": "Kiz Memory",
   "short_name": "Kiz Memory",
-  "description": "Récaps vidéo verticaux pour soirées et workshops Kizomba.",
+  "description": "Récap vidéo vertical automatique pour soirées et workshops.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#05030a",
   "theme_color": "#08040f",
   "orientation": "portrait",
   "icons": [
-    { "src": "assets/icon.png", "sizes": "180x180", "type": "image/png" }
+    { "src": "assets/icon.png", "sizes": "192x192", "type": "image/png" }
   ]
 }

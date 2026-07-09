@@ -1,35 +1,16 @@
-# Kiz Memory V3.6 — Auto Montage Beta
+# Kiz Memory V3.7 — Résumé & Montage bêta
 
-Version UX Flow Clean avec une première génération automatique côté navigateur.
+Version corrigée selon les retours UX/UI :
 
-## Ce qui change
-
-- Après import vidéo : l'analyse démarre automatiquement.
-- Après choix du format : l'app tente de créer une vidéo verticale 9:16 en WebM.
-- Le bouton Télécharger récupère la vidéo générée si le navigateur le permet.
-- La capture reste sans filigrane.
-- Le partage arrive seulement à la fin.
+- typographies réduites et plus propres ;
+- bouton Accueil plus visible pendant la navigation ;
+- suppression du grand cercle violet autour du logo ;
+- import vidéo qui déclenche automatiquement l’analyse ;
+- après analyse, affichage d’un vrai écran **Résumé IA** ;
+- génération d’un montage vertical bêta en WebM quand le navigateur le permet ;
+- résultat téléchargeable ou partageable via le partage Android ;
+- capture caméra sans filigrane.
 
 ## Limites honnêtes
 
-Cette V3.6 est encore une bêta front-end :
-
-- le rendu est en WebM, pas encore en MP4 ;
-- l'audio peut être absent dans le montage généré ;
-- certains téléphones/navigateurs peuvent bloquer MediaRecorder ou canvas.captureStream ;
-- pour une vraie app finale, il faudra un moteur FFmpeg côté serveur ou FFmpeg.wasm bien optimisé.
-
-## Structure
-
-```text
-assets/
-  icon.png
-  logo-mark.png
-  wordmark.png
-
-index.html
-style.css
-app.js
-manifest.webmanifest
-README.md
-```
+Cette version reste un prototype navigateur. Le montage bêta est généré côté navigateur via `canvas.captureStream()` et `MediaRecorder`. Selon Android/navigateur, le rendu peut être en WebM et l’audio peut ne pas être conservé. Pour une vraie app pro avec MP4 + audio fiable, il faudra ajouter FFmpeg côté serveur ou une solution native.

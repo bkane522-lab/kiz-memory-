@@ -1,11 +1,11 @@
 {
   "name": "Kiz Memory",
   "short_name": "Kiz Memory",
-  "description": "Résumé et montage vertical de vidéos de danse.",
+  "description": "Transformez votre danse en souvenir.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#06030d",
+  "background_color": "#07030d",
   "theme_color": "#090510",
   "orientation": "portrait",
   "icons": [

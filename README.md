@@ -1,16 +1,37 @@
-# Kiz Memory V3.7 — Résumé & Montage bêta
+# Kiz Memory V4.0 — Fondation honnête
 
-Version corrigée selon les retours UX/UI :
+Kiz Memory doit rester extrêmement simple :
 
-- typographies réduites et plus propres ;
-- bouton Accueil plus visible pendant la navigation ;
-- suppression du grand cercle violet autour du logo ;
-- import vidéo qui déclenche automatiquement l’analyse ;
-- après analyse, affichage d’un vrai écran **Résumé IA** ;
-- génération d’un montage vertical bêta en WebM quand le navigateur le permet ;
-- résultat téléchargeable ou partageable via le partage Android ;
-- capture caméra sans filigrane.
+**Vidéo → Memory → Partager**
 
-## Limites honnêtes
+## Ce que cette version fait réellement
 
-Cette version reste un prototype navigateur. Le montage bêta est généré côté navigateur via `canvas.captureStream()` et `MediaRecorder`. Selon Android/navigateur, le rendu peut être en WebM et l’audio peut ne pas être conservé. Pour une vraie app pro avec MP4 + audio fiable, il faudra ajouter FFmpeg côté serveur ou une solution native.
+- accueil réduit à **FILMER** et **CHOISIR UNE VIDÉO** ;
+- capture caméra via `getUserMedia` + `MediaRecorder` lorsque le navigateur le permet ;
+- import d'une vidéo du téléphone ;
+- vérification réelle des métadonnées vidéo (durée et dimensions) ;
+- aperçu vidéo ;
+- enregistrement du fichier ;
+- partage natif du fichier lorsque `navigator.share` et `navigator.canShare` l'autorisent ;
+- traitement local uniquement dans cette version.
+
+## Ce qui a été supprimé
+
+- score « vibe » ;
+- `Math.random()` présenté comme analyse ;
+- faux « meilleurs moments » ;
+- timestamps fixes 8/22/38/56/73/88 % ;
+- labels fictifs « Golden moment », « Danse intense », etc. ;
+- choix Soirée / Workshop / Freestyle ;
+- choix 15 / 30 / 60 secondes ;
+- faux écran « Résumé IA » ;
+- boutons Instagram/TikTok qui ne ciblaient pas réellement ces applications ;
+- génération Canvas/WebM présentée comme montage intelligent.
+
+## Limite volontaire de V4.0
+
+Cette version **ne prétend pas encore sélectionner les meilleurs passages** et ne génère pas encore le MP4 final de la future V1. Elle sert de base UX/entrée/sortie honnête avant le branchement du vrai moteur d'analyse mesurable et du pipeline FFmpeg.
+
+## Étape suivante
+
+V4.1 : analyse mesurable des images et de l'audio, sans score aléatoire ni affirmation invérifiable.

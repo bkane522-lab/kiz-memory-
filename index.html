@@ -3,261 +3,129 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Kiz Memory — V3.7 Résumé & Montage</title>
-  <meta name="description" content="Kiz Memory crée un résumé vertical de vos vidéos de danse, avec analyse et montage bêta." />
   <meta name="theme-color" content="#090510" />
+  <meta name="description" content="Kiz Memory transforme une vidéo de danse en souvenir simple à conserver ou partager." />
+  <title>Kiz Memory</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app" id="app">
-    <div class="statusbar" aria-hidden="true">
-      <strong>9:41</strong>
-      <span><i></i><i></i><i></i></span>
-    </div>
-
-    <button class="home-fab hidden" id="homeFab" data-go="home" aria-label="Retour à l’accueil">⌂ Accueil</button>
-
-    <!-- 1. ACCUEIL -->
-    <section class="page page-home active" id="home">
-      <div class="home-center">
-        <img class="mark" src="assets/logo-mark.png" alt="Kiz Memory" />
-        <img class="wordmark" src="assets/wordmark.png" alt="Kiz Memory — Dance Remember Forever" />
-        <p class="home-sub">Capture claire. Montage automatique. Partage après génération.</p>
+    <section class="page active page-home" id="home" aria-labelledby="homeTitle">
+      <div class="brand-block">
+        <img class="brand-mark" src="assets/logo-mark.png" alt="" />
+        <h1 id="homeTitle">Kiz Memory</h1>
+        <p class="promise">Transformez votre danse en souvenir.</p>
       </div>
 
-      <div class="home-actions">
-        <button class="gold-btn" data-go="entry">Créer une Memory</button>
-        <button class="ghost-link" data-go="result">Voir une démo</button>
-      </div>
-    </section>
-
-    <!-- 2. CHOIX ENTREE -->
-    <section class="page" id="entry">
-      <header class="nav">
-        <button class="round" data-go="home" aria-label="Retour">‹</button>
-        <div>
-          <small>Étape 1/6</small>
-          <h1>Nouvelle Memory</h1>
-        </div>
-        <button class="round" data-go="privacy" aria-label="Confidentialité">🛡</button>
-      </header>
-
-      <div class="headline">
-        <h2>Choisissez votre entrée</h2>
-        <p>Filmez maintenant ou importez une vidéo. L’analyse démarre automatiquement.</p>
-      </div>
-
-      <div class="choice-stack">
-        <button class="choice-card primary" id="startCameraBtn">
-          <span class="iconbox">📷</span>
-          <span class="copy">
-            <b>Filmer maintenant</b>
-            <small>Caméra verticale sans filigrane.</small>
-          </span>
-          <em>›</em>
+      <div class="home-actions" aria-label="Créer une Memory">
+        <button class="primary-action" id="startCameraBtn">
+          <span aria-hidden="true">📷</span>
+          <strong>FILMER</strong>
         </button>
-
-        <button class="choice-card" id="openFileBtn">
-          <span class="iconbox">⬆</span>
-          <span class="copy">
-            <b>Importer une vidéo</b>
-            <small>MP4/MOV depuis votre téléphone.</small>
-          </span>
-          <em>›</em>
+        <button class="secondary-action" id="openFileBtn">
+          <span aria-hidden="true">🎞️</span>
+          <strong>CHOISIR UNE VIDÉO</strong>
         </button>
         <input id="fileInput" type="file" accept="video/*" hidden />
       </div>
 
-      <div class="note compact">
-        <span>🔒</span>
-        <p>Prototype local : l’analyse et le montage bêta se font dans le navigateur.</p>
-      </div>
+      <p class="privacy-line">🔒 Votre vidéo reste privée tant que vous ne la partagez pas.</p>
     </section>
 
-    <!-- 3. CAPTURE -->
-    <section class="page page-camera" id="capture">
-      <header class="camera-nav">
-        <button class="round" data-go="entry" aria-label="Fermer">×</button>
-        <b id="recTime">00:00</b>
-        <button class="round" id="torchBtn" aria-label="Torche">⚡</button>
+    <section class="page page-camera" id="capture" aria-labelledby="captureTitle">
+      <header class="simple-header">
+        <button class="icon-button" id="closeCameraBtn" aria-label="Fermer la caméra">×</button>
+        <div>
+          <small>Kiz Memory</small>
+          <h2 id="captureTitle">Filmez votre danse</h2>
+        </div>
+        <span class="header-spacer" aria-hidden="true"></span>
       </header>
 
       <div class="camera-frame" id="cameraFrame">
         <video id="cameraVideo" playsinline muted autoplay></video>
-        <div class="camera-empty" id="cameraEmpty">
-          <b>Caméra prête</b>
-          <small>Appuyez sur REC pour commencer</small>
+        <div class="camera-message" id="cameraMessage">
+          <strong>Caméra en préparation…</strong>
+          <small>Autorisez l’accès si votre téléphone le demande.</small>
         </div>
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
       </div>
 
-      <div class="mode-tabs">
-        <button class="active" data-mode="Soirée">Soirée</button>
-        <button data-mode="Workshop">Workshop</button>
-        <button data-mode="Freestyle">Freestyle</button>
+      <div class="record-status" aria-live="polite">
+        <span id="recordDot" aria-hidden="true"></span>
+        <strong id="recTime">00:00</strong>
       </div>
 
-      <div class="record-row">
-        <button class="square-btn" id="switchCamBtn" aria-label="Changer caméra">↻</button>
-        <button class="record-btn" id="recordBtn" aria-label="Enregistrer"><span></span></button>
-        <button class="square-btn" id="openFileCameraBtn" aria-label="Importer">⬆</button>
+      <div class="camera-actions">
+        <button class="small-action" id="switchCamBtn" aria-label="Changer de caméra">↻</button>
+        <button class="record-action" id="recordBtn" aria-label="Commencer à filmer">
+          <span class="record-icon" aria-hidden="true"></span>
+          <strong id="recordLabel">FILMER</strong>
+        </button>
+        <button class="small-action" id="openFileCameraBtn" aria-label="Choisir une vidéo">🎞️</button>
         <input id="fileInputCamera" type="file" accept="video/*" hidden />
       </div>
 
-      <p class="small-hint">Après STOP, l’analyse et le résumé démarrent automatiquement.</p>
+      <p class="camera-help" id="cameraHelp">Cadrez les danseurs puis appuyez sur FILMER.</p>
     </section>
 
-    <!-- 4. ANALYSE -->
-    <section class="page" id="analysis">
-      <header class="nav minimal">
-        <button class="round" data-go="entry" aria-label="Retour">‹</button>
-        <span></span>
-        <span></span>
-      </header>
+    <section class="page" id="processing" aria-labelledby="processingTitle">
+      <div class="processing-card">
+        <img src="assets/logo-mark.png" alt="" class="processing-logo" />
+        <div class="spinner" aria-hidden="true"></div>
+        <h2 id="processingTitle">Préparation de votre vidéo…</h2>
+        <p id="processingText" aria-live="polite">Vérification du fichier.</p>
 
-      <div class="center-panel">
-        <small>Étape 2/6</small>
-        <h2>Analyse en cours…</h2>
-        <p id="analysisText">On détecte les temps forts et on prépare le résumé.</p>
-
-        <div class="progress-ring">
-          <svg viewBox="0 0 120 120" aria-hidden="true">
-            <circle cx="60" cy="60" r="52" class="track"></circle>
-            <circle cx="60" cy="60" r="52" class="bar" id="progressCircle"></circle>
-          </svg>
-          <strong id="progressText">0%</strong>
-        </div>
-
-        <ol class="simple-steps">
-          <li class="active" id="aStep1"><span>1</span> Vidéo reçue</li>
-          <li id="aStep2"><span>2</span> Temps forts</li>
-          <li id="aStep3"><span>3</span> Résumé IA</li>
+        <ol class="real-steps">
+          <li id="stepReceived"><span>✓</span> Vidéo reçue</li>
+          <li id="stepChecked"><span>2</span> Vidéo vérifiée</li>
+          <li id="stepReady"><span>3</span> Prête pour Kiz Memory</li>
         </ol>
       </div>
     </section>
 
-    <!-- 5. RESUME IA -->
-    <section class="page" id="summary">
-      <header class="nav">
-        <button class="round" data-go="entry" aria-label="Retour">‹</button>
+    <section class="page" id="result" aria-labelledby="resultTitle">
+      <header class="simple-header result-header">
+        <button class="icon-button" id="resultHomeBtn" aria-label="Recommencer">‹</button>
         <div>
-          <small>Étape 3/6</small>
-          <h1>Résumé IA</h1>
+          <small>Kiz Memory</small>
+          <h2 id="resultTitle">Votre vidéo est prête</h2>
         </div>
-        <button class="round" data-go="home" aria-label="Accueil">⌂</button>
+        <span class="header-spacer" aria-hidden="true"></span>
       </header>
 
-      <div class="summary-card">
-        <div class="summary-head">
-          <span>✨</span>
-          <div>
-            <h2>Votre vidéo est prête</h2>
-            <p id="summaryIntro">12 moments détectés · format vertical recommandé</p>
-          </div>
-        </div>
-
-        <div class="mini-stats">
-          <article><b id="statClips">12</b><small>clips</small></article>
-          <article><b id="statDuration">30s</b><small>conseillé</small></article>
-          <article><b id="statScore">92</b><small>vibe</small></article>
-        </div>
-
-        <h3>Temps forts</h3>
-        <div class="timeline-list" id="timelineList"></div>
+      <div class="result-video" id="resultVideoFrame">
+        <video id="resultVideo" playsinline controls preload="metadata"></video>
       </div>
 
-      <button class="gold-btn bottom-safe" data-go="format">Choisir le format</button>
-    </section>
+      <div class="video-info" id="videoInfo" aria-live="polite"></div>
 
-    <!-- 6. FORMAT -->
-    <section class="page" id="format">
-      <header class="nav">
-        <button class="round" data-go="summary" aria-label="Retour">‹</button>
-        <div>
-          <small>Étape 4/6</small>
-          <h1>Format</h1>
-        </div>
-        <button class="round" data-go="home" aria-label="Accueil">⌂</button>
-      </header>
-
-      <div class="headline compact-head">
-        <h2>Choisissez la durée</h2>
-        <p>Vertical 9:16, prêt pour Reels, TikTok, Shorts et WhatsApp.</p>
+      <div class="result-actions">
+        <button class="primary-action compact-action" id="watchBtn">
+          <span aria-hidden="true">▶️</span>
+          <strong>REGARDER</strong>
+        </button>
+        <button class="secondary-action compact-action" id="shareBtn">
+          <span aria-hidden="true">📱</span>
+          <strong>PARTAGER</strong>
+        </button>
+        <button class="secondary-action compact-action" id="saveBtn">
+          <span aria-hidden="true">💾</span>
+          <strong>ENREGISTRER</strong>
+        </button>
       </div>
 
-      <div class="format-list">
-        <button class="selected" data-duration="15"><i></i><b>Story 15s</b><small>Rapide</small><em>9:16</em></button>
-        <button data-duration="30"><i></i><b>Reel 30s</b><small>Recommandé</small><em>9:16</em></button>
-        <button data-duration="60"><i></i><b>Aftermovie 60s</b><small>Émotionnel</small><em>9:16</em></button>
-      </div>
+      <button class="restart-button" id="restartBtn">RECOMMENCER</button>
 
-      <button class="gold-btn bottom-safe" id="generateBtn">Générer la Memory</button>
-    </section>
-
-    <!-- 7. GENERATION -->
-    <section class="page" id="generate">
-      <div class="center-panel generate-panel">
-        <small>Étape 5/6</small>
-        <h2>Montage automatique</h2>
-        <p id="renderText">Création du récap vertical…</p>
-        <div class="clean-loader">
-          <img src="assets/logo-mark.png" alt="" />
-        </div>
-        <div class="render-line"><i id="renderBar"></i></div>
-        <small class="render-note" id="renderNote">Le rendu WebM bêta est en préparation.</small>
-      </div>
-    </section>
-
-    <!-- 8. RESULTAT -->
-    <section class="page" id="result">
-      <header class="nav">
-        <button class="round" data-go="format" aria-label="Retour">‹</button>
-        <div>
-          <small>Étape 6/6</small>
-          <h1>Memory prête</h1>
-        </div>
-        <button class="round home-round" data-go="home" aria-label="Accueil">⌂</button>
-      </header>
-
-      <div class="result-video">
-        <video id="resultVideo" playsinline controls></video>
-        <div class="result-fallback" id="resultFallback">
-          <img src="assets/logo-mark.png" alt="" />
-          <b>KIZOMBA NIGHT</b>
-        </div>
-      </div>
-
-      <div class="result-summary">
-        <b>Résumé du montage</b>
-        <p id="finalSummary">Récap vertical généré en bêta.</p>
-      </div>
-
-      <div class="share-grid">
-        <button id="shareInstagram"><span>◎</span><small>Instagram</small></button>
-        <button id="shareTiktok"><span>♪</span><small>TikTok</small></button>
-        <button id="shareWhatsapp"><span>☘</span><small>WhatsApp</small></button>
-        <button id="shareNative"><span>•••</span><small>Plus</small></button>
-      </div>
-
-      <button class="gold-outline" id="downloadVideoBtn">Télécharger la Memory</button>
-      <button class="soft-btn" data-go="home">Retour à l’accueil</button>
-    </section>
-
-    <section class="page" id="privacy">
-      <header class="nav">
-        <button class="round" data-go="entry">‹</button>
-        <h1>Confidentialité</h1>
-        <button class="round" data-go="home">⌂</button>
-      </header>
-      <div class="summary-card">
-        <h2>Sécurisé par défaut</h2>
-        <p>Cette version prototype garde les fichiers dans le navigateur. Pour une version publique, il faudra ajouter floutage, consentement et validation avant partage.</p>
-      </div>
+      <aside class="foundation-note" role="note">
+        <strong>Version V4.0 — fondation</strong>
+        <p>Cette version ne prétend pas encore choisir les meilleurs moments. Le moteur d’analyse mesurable sera ajouté à l’étape suivante.</p>
+      </aside>
     </section>
   </main>
 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-# Kiz Memory V4.0 — Fondation honnête
+# Kiz Memory V4.0.1 — Fondation honnête
 
 Kiz Memory doit rester extrêmement simple :
 
@@ -35,3 +35,11 @@ Cette version **ne prétend pas encore sélectionner les meilleurs passages** et
 ## Étape suivante
 
 V4.1 : analyse mesurable des images et de l'audio, sans score aléatoire ni affirmation invérifiable.
+
+
+## Correctif V4.0.1
+- validation des métadonnées vidéo plus robuste sur mobile ;
+- délai de lecture porté à 45 s ;
+- élément vidéo de contrôle attaché au DOM pour les navigateurs mobiles ;
+- gestion des durées 0/Infinity ;
+- diagnostic HEVC/H.265 sans présenter le fichier comme corrompu.

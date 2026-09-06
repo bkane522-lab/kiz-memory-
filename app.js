@@ -263,9 +263,15 @@ async function prepareSource() {
     await nextPaint();
     go("result");
   } catch (error) {
-    console.warn("Invalid video", error);
+    console.warn("Video metadata/decode failed", error);
+    const codecHint = await detectCodecHint(state.sourceBlob).catch(() => "");
     resetAndRestart();
-    toast("Cette vidéo ne peut pas être lue correctement. Essayez un autre fichier.");
+
+    if (codecHint === "HEVC/H.265") {
+      toast("Vidéo HEVC/H.265 détectée. Ce navigateur ne peut pas toujours la lire. Le fichier n’est pas forcément endommagé.");
+    } else {
+      toast("Le navigateur n’a pas réussi à décoder cette vidéo. Le fichier n’est pas forcément endommagé.");
+    }
   }
 }
 
@@ -281,29 +287,106 @@ function readVideoMetadata(url) {
     const video = document.createElement("video");
     video.preload = "metadata";
     video.playsInline = true;
-    const timeout = window.setTimeout(() => reject(new Error("metadata timeout")), 10000);
+    video.muted = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("muted", "");
+    video.style.position = "fixed";
+    video.style.width = "1px";
+    video.style.height = "1px";
+    video.style.opacity = "0";
+    video.style.pointerEvents = "none";
+    video.style.left = "-10px";
+    video.style.bottom = "-10px";
+    document.body.appendChild(video);
 
-    video.addEventListener("loadedmetadata", () => {
+    let settled = false;
+    let seekTried = false;
+    const timeout = window.setTimeout(() => {
+      fail(new Error("metadata timeout"));
+    }, 45000);
+
+    const cleanup = () => {
       window.clearTimeout(timeout);
+      video.removeEventListener("loadedmetadata", tryResolve);
+      video.removeEventListener("durationchange", tryResolve);
+      video.removeEventListener("loadeddata", tryResolve);
+      video.removeEventListener("canplay", tryResolve);
+      video.removeEventListener("error", onError);
+      try {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+      } catch (_) {}
+      video.remove();
+    };
+
+    const finish = (metadata) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(metadata);
+    };
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    function tryResolve() {
       const duration = Number(video.duration);
-      if (!Number.isFinite(duration) || duration <= 0) {
-        reject(new Error("invalid duration"));
+      if (Number.isFinite(duration) && duration > 0) {
+        finish({
+          duration,
+          width: video.videoWidth || 0,
+          height: video.videoHeight || 0
+        });
         return;
       }
-      resolve({
-        duration,
-        width: video.videoWidth || 0,
-        height: video.videoHeight || 0
-      });
-    }, { once: true });
 
-    video.addEventListener("error", () => {
-      window.clearTimeout(timeout);
-      reject(video.error || new Error("video error"));
-    }, { once: true });
+      // Certains fichiers mobiles/MediaRecorder annoncent d’abord une durée
+      // infinie ou nulle. Un seek déclenche alors le calcul réel de durée.
+      if (!seekTried && video.readyState >= 1 && (duration === Infinity || duration === 0)) {
+        seekTried = true;
+        try {
+          video.currentTime = 1e10;
+        } catch (_) {}
+      }
+    }
+
+    function onError() {
+      const mediaError = video.error;
+      const error = new Error(`video error${mediaError?.code ? ` code ${mediaError.code}` : ""}`);
+      error.mediaCode = mediaError?.code || 0;
+      fail(error);
+    }
+
+    video.addEventListener("loadedmetadata", tryResolve);
+    video.addEventListener("durationchange", tryResolve);
+    video.addEventListener("loadeddata", tryResolve);
+    video.addEventListener("canplay", tryResolve);
+    video.addEventListener("error", onError, { once: true });
 
     video.src = url;
+    video.load();
   });
+}
+
+async function detectCodecHint(blob) {
+  if (!blob?.size || !blob.arrayBuffer) return "";
+
+  // Lecture limitée : on cherche seulement les identifiants de codec du conteneur.
+  const sampleSize = Math.min(blob.size, 4 * 1024 * 1024);
+  const buffer = await blob.slice(0, sampleSize).arrayBuffer();
+  const text = new TextDecoder("latin1").decode(buffer);
+
+  if (text.includes("hvc1") || text.includes("hev1")) return "HEVC/H.265";
+  if (text.includes("avc1") || text.includes("avc3")) return "H.264/AVC";
+  if (text.includes("av01")) return "AV1";
+  if (text.includes("vp09")) return "VP9";
+  if (text.includes("vp08")) return "VP8";
+  return "";
 }
 
 function prepareResultPreview() {

@@ -358,3 +358,26 @@ button:focus-visible { outline: 3px solid rgba(255, 216, 107, 0.85); outline-off
   .small-action { width: 52px; height: 52px; }
   .record-action { min-width: 156px; }
 }
+
+
+.version-badge {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 9px;
+  border: 1px solid rgba(245, 198, 80, .35);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+.preview-status {
+  min-height: 20px;
+  margin: 6px auto 0;
+  max-width: 560px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.preview-status.ok { color: #cfe8d6; }
+.preview-status.warn { color: #f1d6a6; }

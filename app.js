@@ -57,17 +57,20 @@ $("#resultHomeBtn").addEventListener("click", resetAndRestart);
 $("#restartBtn").addEventListener("click", resetAndRestart);
 
 async function handleFileSelection(event) {
-  const file = event.target.files?.[0];
-  event.target.value = "";
+  const input = event.currentTarget;
+  const file = input.files?.[0];
   if (!file) return;
 
-  if (file.type && !file.type.startsWith("video/")) {
+  // V4.0.3 : garder le File vivant jusqu’à la création de l’URL locale.
+  if (file.type && !file.type.startsWith("video/") && !/\.(mp4|mov|m4v|webm|3gp|mkv)$/i.test(file.name || "")) {
+    input.value = "";
     toast("Choisissez un fichier vidéo.");
     return;
   }
 
   stopCamera();
-  setSource(file, file.name, file.type);
+  setSource(file, file.name, file.type || mimeFromFilename(file.name));
+  input.value = "";
   await prepareSource();
 }
 
@@ -248,9 +251,6 @@ async function prepareSource() {
   setStep("stepReady", false, "3");
   $("#processingText").textContent = "Réception de la vidéo.";
 
-  // V4.0.2 : ne plus bloquer un fichier mobile sur un test de décodage
-  // navigateur. Un MP4 valide peut être refusé par le moteur média du
-  // navigateur alors que le fichier lui-même est parfaitement exploitable.
   if (!state.sourceBlob.size) {
     resetAndRestart();
     toast("Le fichier sélectionné est vide.");
@@ -269,14 +269,14 @@ async function prepareSource() {
   }
 
   setStep("stepChecked", true, "✓");
-  $("#processingText").textContent = "Fichier accepté. Préparation de l’aperçu.";
-
-  prepareResultPreviewSoft();
-  setStep("stepReady", true, "✓");
-  $("#processingText").textContent = "Vidéo prête pour Kiz Memory.";
-
+  $("#processingText").textContent = "Fichier accepté.";
   await nextPaint();
+
+  // Rendre le lecteur visible AVANT de lui affecter le Blob mobile.
   go("result");
+  await nextPaint();
+  loadResultPreview();
+  setStep("stepReady", true, "✓");
 }
 
 function setStep(id, done, marker) {
@@ -286,117 +286,13 @@ function setStep(id, done, marker) {
   span.textContent = marker;
 }
 
-function readVideoMetadata(url) {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.playsInline = true;
-    video.muted = true;
-    video.setAttribute("playsinline", "");
-    video.setAttribute("muted", "");
-    video.style.position = "fixed";
-    video.style.width = "1px";
-    video.style.height = "1px";
-    video.style.opacity = "0";
-    video.style.pointerEvents = "none";
-    video.style.left = "-10px";
-    video.style.bottom = "-10px";
-    document.body.appendChild(video);
+function loadResultPreview() {
+  const status = $("#previewStatus");
+  status.className = "preview-status";
+  status.textContent = "Chargement de l’aperçu…";
 
-    let settled = false;
-    let seekTried = false;
-    const timeout = window.setTimeout(() => {
-      fail(new Error("metadata timeout"));
-    }, 45000);
-
-    const cleanup = () => {
-      window.clearTimeout(timeout);
-      video.removeEventListener("loadedmetadata", tryResolve);
-      video.removeEventListener("durationchange", tryResolve);
-      video.removeEventListener("loadeddata", tryResolve);
-      video.removeEventListener("canplay", tryResolve);
-      video.removeEventListener("error", onError);
-      try {
-        video.pause();
-        video.removeAttribute("src");
-        video.load();
-      } catch (_) {}
-      video.remove();
-    };
-
-    const finish = (metadata) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(metadata);
-    };
-
-    const fail = (error) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(error);
-    };
-
-    function tryResolve() {
-      const duration = Number(video.duration);
-      if (Number.isFinite(duration) && duration > 0) {
-        finish({
-          duration,
-          width: video.videoWidth || 0,
-          height: video.videoHeight || 0
-        });
-        return;
-      }
-
-      // Certains fichiers mobiles/MediaRecorder annoncent d’abord une durée
-      // infinie ou nulle. Un seek déclenche alors le calcul réel de durée.
-      if (!seekTried && video.readyState >= 1 && (duration === Infinity || duration === 0)) {
-        seekTried = true;
-        try {
-          video.currentTime = 1e10;
-        } catch (_) {}
-      }
-    }
-
-    function onError() {
-      const mediaError = video.error;
-      const error = new Error(`video error${mediaError?.code ? ` code ${mediaError.code}` : ""}`);
-      error.mediaCode = mediaError?.code || 0;
-      fail(error);
-    }
-
-    video.addEventListener("loadedmetadata", tryResolve);
-    video.addEventListener("durationchange", tryResolve);
-    video.addEventListener("loadeddata", tryResolve);
-    video.addEventListener("canplay", tryResolve);
-    video.addEventListener("error", onError, { once: true });
-
-    video.src = url;
-    video.load();
-  });
-}
-
-async function detectCodecHint(blob) {
-  if (!blob?.size || !blob.arrayBuffer) return "";
-
-  // Lecture limitée : on cherche seulement les identifiants de codec du conteneur.
-  const sampleSize = Math.min(blob.size, 4 * 1024 * 1024);
-  const buffer = await blob.slice(0, sampleSize).arrayBuffer();
-  const text = new TextDecoder("latin1").decode(buffer);
-
-  if (text.includes("hvc1") || text.includes("hev1")) return "HEVC/H.265";
-  if (text.includes("avc1") || text.includes("avc3")) return "H.264/AVC";
-  if (text.includes("av01")) return "AV1";
-  if (text.includes("vp09")) return "VP9";
-  if (text.includes("vp08")) return "VP8";
-  return "";
-}
-
-function prepareResultPreviewSoft() {
   resultVideo.pause();
   resultVideo.removeAttribute("src");
-  resultVideo.src = state.sourceUrl;
 
   const baseInfo = [];
   if (state.sourceMime) baseInfo.push(state.sourceMime.replace("video/", "").toUpperCase());
@@ -417,20 +313,46 @@ function prepareResultPreviewSoft() {
     $("#videoInfo").textContent = parts.filter(Boolean).join(" · ");
   };
 
-  const onError = async () => {
+  const onCanPlay = () => {
+    status.className = "preview-status ok";
+    status.textContent = "Vidéo prête à être lue sur ce téléphone.";
+  };
+
+  const onError = () => {
     const code = resultVideo.error?.code || 0;
-    const codecHint = await detectCodecHint(state.sourceBlob).catch(() => "");
-    const details = [codecHint, code ? `erreur navigateur ${code}` : ""].filter(Boolean).join(" · ");
-    $("#videoInfo").textContent = [
-      "Vidéo importée",
-      details,
-      formatFileSize(state.sourceBlob?.size || 0)
-    ].filter(Boolean).join(" · ");
-    toast("La vidéo a bien été importée. L’aperçu n’est simplement pas disponible sur ce navigateur.");
+    status.className = "preview-status warn";
+    status.textContent = `Vidéo importée, mais l’aperçu local a échoué${code ? ` (code navigateur ${code})` : ""}. Le fichier n’est pas rejeté.`;
+    console.warn("Kiz Memory preview error", {
+      mediaCode: code,
+      name: state.sourceName,
+      type: state.sourceMime,
+      size: state.sourceBlob?.size || 0
+    });
   };
 
   resultVideo.addEventListener("loadedmetadata", onMetadata, { once: true });
+  resultVideo.addEventListener("canplay", onCanPlay, { once: true });
   resultVideo.addEventListener("error", onError, { once: true });
+
+  resultVideo.src = state.sourceUrl;
+  resultVideo.load();
+
+  // Un aperçu lent ne doit jamais annuler l’import.
+  window.setTimeout(() => {
+    if (!state.duration && status.textContent === "Chargement de l’aperçu…") {
+      status.className = "preview-status warn";
+      status.textContent = "La vidéo est importée. L’aperçu met du temps à démarrer sur ce navigateur.";
+    }
+  }, 8000);
+}
+
+function mimeFromFilename(name = "") {
+  const lower = String(name).toLowerCase();
+  if (lower.endsWith(".mp4") || lower.endsWith(".m4v")) return "video/mp4";
+  if (lower.endsWith(".mov")) return "video/quicktime";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".3gp")) return "video/3gpp";
+  return "";
 }
 
 function formatFileSize(bytes) {
@@ -513,6 +435,8 @@ function resetAndRestart() {
   resultVideo.pause();
   resultVideo.removeAttribute("src");
   resultVideo.load();
+  $("#previewStatus").textContent = "";
+  $("#previewStatus").className = "preview-status";
   clearSourceUrl();
 
   state.sourceBlob = null;

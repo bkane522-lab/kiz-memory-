@@ -246,33 +246,37 @@ async function prepareSource() {
   setStep("stepReceived", true, "✓");
   setStep("stepChecked", false, "2");
   setStep("stepReady", false, "3");
-  $("#processingText").textContent = "Vérification de la vidéo.";
+  $("#processingText").textContent = "Réception de la vidéo.";
 
-  try {
-    const metadata = await readVideoMetadata(state.sourceUrl);
-    state.duration = metadata.duration;
-    state.width = metadata.width;
-    state.height = metadata.height;
-    setStep("stepChecked", true, "✓");
-
-    $("#processingText").textContent = "Vidéo vérifiée. Préparation de l’aperçu.";
-    prepareResultPreview();
-    setStep("stepReady", true, "✓");
-    $("#processingText").textContent = "Vidéo prête.";
-
-    await nextPaint();
-    go("result");
-  } catch (error) {
-    console.warn("Video metadata/decode failed", error);
-    const codecHint = await detectCodecHint(state.sourceBlob).catch(() => "");
+  // V4.0.2 : ne plus bloquer un fichier mobile sur un test de décodage
+  // navigateur. Un MP4 valide peut être refusé par le moteur média du
+  // navigateur alors que le fichier lui-même est parfaitement exploitable.
+  if (!state.sourceBlob.size) {
     resetAndRestart();
-
-    if (codecHint === "HEVC/H.265") {
-      toast("Vidéo HEVC/H.265 détectée. Ce navigateur ne peut pas toujours la lire. Le fichier n’est pas forcément endommagé.");
-    } else {
-      toast("Le navigateur n’a pas réussi à décoder cette vidéo. Le fichier n’est pas forcément endommagé.");
-    }
+    toast("Le fichier sélectionné est vide.");
+    return;
   }
+
+  const looksLikeVideo =
+    !state.sourceMime ||
+    state.sourceMime.startsWith("video/") ||
+    /\.(mp4|mov|m4v|webm|3gp|mkv)$/i.test(state.sourceName || "");
+
+  if (!looksLikeVideo) {
+    resetAndRestart();
+    toast("Choisissez un fichier vidéo.");
+    return;
+  }
+
+  setStep("stepChecked", true, "✓");
+  $("#processingText").textContent = "Fichier accepté. Préparation de l’aperçu.";
+
+  prepareResultPreviewSoft();
+  setStep("stepReady", true, "✓");
+  $("#processingText").textContent = "Vidéo prête pour Kiz Memory.";
+
+  await nextPaint();
+  go("result");
 }
 
 function setStep(id, done, marker) {
@@ -389,15 +393,51 @@ async function detectCodecHint(blob) {
   return "";
 }
 
-function prepareResultPreview() {
+function prepareResultPreviewSoft() {
   resultVideo.pause();
+  resultVideo.removeAttribute("src");
   resultVideo.src = state.sourceUrl;
-  resultVideo.load();
 
-  const parts = [formatTime(state.duration)];
-  if (state.width && state.height) parts.push(`${state.width} × ${state.height}`);
-  if (state.sourceMime) parts.push(state.sourceMime.replace("video/", "").toUpperCase());
-  $("#videoInfo").textContent = parts.join(" · ");
+  const baseInfo = [];
+  if (state.sourceMime) baseInfo.push(state.sourceMime.replace("video/", "").toUpperCase());
+  baseInfo.push(formatFileSize(state.sourceBlob?.size || 0));
+  $("#videoInfo").textContent = baseInfo.filter(Boolean).join(" · ");
+
+  const onMetadata = () => {
+    const duration = Number(resultVideo.duration);
+    state.duration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+    state.width = resultVideo.videoWidth || 0;
+    state.height = resultVideo.videoHeight || 0;
+
+    const parts = [];
+    if (state.duration) parts.push(formatTime(state.duration));
+    if (state.width && state.height) parts.push(`${state.width} × ${state.height}`);
+    if (state.sourceMime) parts.push(state.sourceMime.replace("video/", "").toUpperCase());
+    parts.push(formatFileSize(state.sourceBlob?.size || 0));
+    $("#videoInfo").textContent = parts.filter(Boolean).join(" · ");
+  };
+
+  const onError = async () => {
+    const code = resultVideo.error?.code || 0;
+    const codecHint = await detectCodecHint(state.sourceBlob).catch(() => "");
+    const details = [codecHint, code ? `erreur navigateur ${code}` : ""].filter(Boolean).join(" · ");
+    $("#videoInfo").textContent = [
+      "Vidéo importée",
+      details,
+      formatFileSize(state.sourceBlob?.size || 0)
+    ].filter(Boolean).join(" · ");
+    toast("La vidéo a bien été importée. L’aperçu n’est simplement pas disponible sur ce navigateur.");
+  };
+
+  resultVideo.addEventListener("loadedmetadata", onMetadata, { once: true });
+  resultVideo.addEventListener("error", onError, { once: true });
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (!size) return "";
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} Ko`;
+  return `${(size / (1024 * 1024)).toFixed(size >= 100 * 1024 * 1024 ? 0 : 1)} Mo`;
 }
 
 $("#watchBtn").addEventListener("click", async () => {

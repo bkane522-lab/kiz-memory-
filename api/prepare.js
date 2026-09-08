@@ -152,7 +152,7 @@ async function signedReadUrl(pathname, ttlMs) {
   const validUntil = Date.now() + ttlMs;
   const token = await issueSignedToken({ pathname, operations: ['get'], validUntil });
   const { presignedUrl } = await presignUrl(token, {
-    pathname, operation: 'get', validUntil, useCache: false
+    pathname, operation: 'get', access: 'private', validUntil, useCache: false
   });
   return presignedUrl;
 }
@@ -165,7 +165,7 @@ async function signedWriteUrl(pathname, ttlMs, contentType) {
     allowedContentTypes: [contentType],
     validUntil
   });
-  const { presignedUrl } = await presignUrl(token, { pathname, operation: 'put', validUntil });
+  const { presignedUrl } = await presignUrl(token, { pathname, operation: 'put', access: 'private', validUntil });
   return presignedUrl;
 }
 

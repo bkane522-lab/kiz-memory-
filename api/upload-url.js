@@ -48,6 +48,7 @@ export default async function handler(req, res) {
     const { presignedUrl } = await presignUrl(token, {
       pathname,
       operation: 'put',
+      access: 'private',
       validUntil
     });
 

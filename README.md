@@ -1,4 +1,4 @@
-# Kiz Memory V4.2
+# Kiz Memory V4.2.1
 
 **Promesse : Vidéo → Memory → Partager.**
 
@@ -37,3 +37,11 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - Le modèle de pose n'identifie pas la qualité artistique de la danse et ne prétend pas connaître les « meilleurs moments » au sens humain.
 - La sélection repose sur des critères mesurables : mouvement, variations, présence/cadrage corporel quand disponible, rotation approximée du torse et énergie audio.
 - Les grosses vidéos 4K peuvent demander plusieurs minutes de traitement serveur.
+
+
+## Correctif V4.2.1
+
+- corrige la lecture des blobs privés après le transfert ;
+- ajoute explicitement `access: 'private'` à toutes les URL signées Vercel Blob (`GET` et `PUT`) ;
+- conserve le stockage privé CDG1 et le pipeline d'analyse existant ;
+- aucun score aléatoire ni timestamp prédéfini n'a été ajouté.

@@ -1,4 +1,4 @@
-import { del, issueSignedToken, presignUrl } from '@vercel/blob';
+import { del, head, issueSignedToken, list, presignUrl } from '@vercel/blob';
 import { Sandbox } from '@vercel/sandbox';
 import { randomUUID } from 'node:crypto';
 
@@ -18,10 +18,12 @@ export default async function handler(req, res) {
 
   try {
     const body = parseBody(req.body);
-    const sourcePath = String(body.sourcePath || '');
-    if (!isAllowedSourcePath(sourcePath)) {
+    const requestedSourcePath = String(body.sourcePath || '');
+    if (!isAllowedSourcePath(requestedSourcePath)) {
       return res.status(400).json({ error: 'Chemin vidéo invalide.' });
     }
+
+    const sourcePath = await resolveStoredSourcePath(requestedSourcePath);
 
     proxyPath = `${ANALYSIS_PREFIX}${Date.now()}-${randomUUID()}-proxy.mp4`;
     audioPath = `${ANALYSIS_PREFIX}${Date.now()}-${randomUUID()}-audio.wav`;
@@ -33,8 +35,14 @@ export default async function handler(req, res) {
     sandbox = await createSandbox();
     await ensureFfmpeg(sandbox);
 
-    const download = await sandbox.runCommand('curl', ['-fsSL', '--retry', '2', '-o', 'input-video', sourceUrl]);
-    if (download.exitCode !== 0) throw new Error(`Video download failed: ${truncate(await download.stderr())}`);
+    const download = await sandbox.runCommand('curl', [
+      '-sS', '-L', '--retry', '2', '--connect-timeout', '30',
+      '-w', '%{http_code}', '-o', 'input-video', sourceUrl
+    ]);
+    const downloadStatus = (await download.stdout()).trim();
+    if (download.exitCode !== 0 || downloadStatus < '200' || downloadStatus >= '300') {
+      throw new Error(`Video download failed (HTTP ${downloadStatus || 'network'}): ${truncate(await download.stderr())}`);
+    }
 
     const duration = await probeDuration(sandbox);
     const hasAudio = await probeAudio(sandbox);
@@ -84,6 +92,7 @@ export default async function handler(req, res) {
     const audioUrl = await signedReadUrl(audioPath, readTtl);
 
     return res.status(200).json({
+      sourcePath,
       proxyUrl,
       proxyPath,
       audioUrl,
@@ -103,9 +112,32 @@ export default async function handler(req, res) {
   }
 }
 
+async function resolveStoredSourcePath(requestedPath) {
+  try {
+    await head(requestedPath, { access: 'private' });
+    return requestedPath;
+  } catch (exactError) {
+    // A presigned PUT can return a normalized pathname. If the client could not
+    // read that JSON response, recover conservatively from the unique prefix.
+    const dot = requestedPath.lastIndexOf('.');
+    const prefix = dot > 0 ? requestedPath.slice(0, dot) : requestedPath;
+    try {
+      const result = await list({ prefix, limit: 10 });
+      const candidates = (result?.blobs || []).filter((blob) =>
+        blob?.pathname && isAllowedSourcePath(blob.pathname) && blob.pathname.startsWith(prefix)
+      );
+      if (candidates.length === 1) return candidates[0].pathname;
+    } catch (listError) {
+      console.error('Kiz Memory source lookup failed', listError);
+    }
+    throw new Error(`Source blob not found after upload: ${truncate(exactError?.message || exactError)}`);
+  }
+}
+
 async function createSandbox() {
   const config = {
     persistent: false,
+    region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
     resources: { vcpus: 4 }
   };
@@ -190,7 +222,8 @@ function publicError(error) {
   const text = String(error?.message || error || '');
   if (/snapshot/i.test(text)) return 'Le snapshot FFmpeg Vercel Sandbox est invalide ou expiré.';
   if (/install/i.test(text)) return 'FFmpeg n’a pas pu être préparé dans le moteur vidéo.';
-  if (/download/i.test(text)) return 'Le moteur n’a pas pu récupérer la vidéo privée.';
+  if (/Source blob not found/i.test(text)) return 'Le transfert est terminé, mais Vercel Blob ne retrouve pas encore le fichier stocké.';
+  if (/download/i.test(text)) return 'Le moteur voit la vidéo privée, mais son téléchargement vers le moteur FFmpeg a échoué.';
   if (/proxy/i.test(text)) return 'La copie légère d’analyse n’a pas pu être créée.';
   if (/audio/i.test(text)) return 'La piste audio d’analyse n’a pas pu être créée.';
   if (/upload/i.test(text)) return 'Les fichiers temporaires d’analyse n’ont pas pu être stockés.';

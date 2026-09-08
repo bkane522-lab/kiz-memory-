@@ -1,4 +1,4 @@
-const APP_VERSION = "4.2.1";
+const APP_VERSION = "4.2.2";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
@@ -279,11 +279,16 @@ async function createMemory() {
 
     $("#uploadProgressWrap").hidden = false;
     $("#processingText").textContent = "Transfert privé de votre vidéo…";
-    await uploadWithProgress(state.sourceBlob, ticket.presignedUrl, (percent) => {
+    const uploaded = await uploadWithProgress(state.sourceBlob, ticket.presignedUrl, (percent) => {
       const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
       $("#uploadProgressBar").style.width = `${safePercent}%`;
       $("#uploadProgressText").textContent = `${safePercent} %`;
     });
+    if (uploaded?.pathname && isSafeBlobPath(uploaded.pathname)) {
+      cleanupOnFailure.delete(state.sourcePath);
+      state.sourcePath = uploaded.pathname;
+      cleanupOnFailure.add(state.sourcePath);
+    }
 
     setStep("stepUploaded", true, "✓");
     $("#uploadProgressWrap").hidden = true;
@@ -291,6 +296,11 @@ async function createMemory() {
 
     $("#processingText").textContent = "Création d’une copie légère pour l’analyse…";
     const prepared = await requestPreparation();
+    if (prepared.sourcePath && isSafeBlobPath(prepared.sourcePath)) {
+      cleanupOnFailure.delete(state.sourcePath);
+      state.sourcePath = prepared.sourcePath;
+      cleanupOnFailure.add(state.sourcePath);
+    }
     state.proxyPath = prepared.proxyPath;
     state.audioPath = prepared.audioPath;
     cleanupOnFailure.add(prepared.proxyPath);
@@ -349,6 +359,10 @@ function setStep(id, done, marker) {
   if (span) span.textContent = marker;
 }
 
+function isSafeBlobPath(path) {
+  return typeof path === "string" && path.startsWith("kiz-memory/") && /^[a-zA-Z0-9_./-]+$/.test(path) && path.length < 300;
+}
+
 async function requestUploadUrl() {
   const response = await fetch("/api/upload-url", {
     method: "POST",
@@ -376,7 +390,13 @@ function uploadWithProgress(blob, url, onProgress) {
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         onProgress(100);
-        resolve();
+        let metadata = null;
+        try {
+          metadata = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+        } catch {
+          metadata = null;
+        }
+        resolve(metadata);
       } else reject(new Error(`Échec du transfert privé (${xhr.status}).`));
     });
     xhr.addEventListener("error", () => reject(new Error("Le transfert privé a échoué.")));

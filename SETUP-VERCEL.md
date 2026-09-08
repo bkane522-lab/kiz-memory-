@@ -1,4 +1,4 @@
-# Installation Vercel — Kiz Memory V4.2.1
+# Installation Vercel — Kiz Memory V4.2.2
 
 ## 1. Remplacer le projet
 

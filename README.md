@@ -1,59 +1,39 @@
-# Kiz Memory V4.0.3.2 — Fondation honnête
+# Kiz Memory V4.2
 
-Kiz Memory doit rester extrêmement simple :
+**Promesse : Vidéo → Memory → Partager.**
 
-**Vidéo → Memory → Partager**
+V4.2 ajoute la première vraie sélection automatique de passages. Aucun timestamp fixe, aucun `Math.random()` et aucun score « vibe ».
 
-## Ce que cette version fait réellement
+## Pipeline réel
 
-- accueil réduit à **FILMER** et **CHOISIR UNE VIDÉO** ;
-- capture caméra via `getUserMedia` + `MediaRecorder` lorsque le navigateur le permet ;
-- import d'une vidéo du téléphone ;
-- vérification réelle des métadonnées vidéo (durée et dimensions) ;
-- aperçu vidéo ;
-- enregistrement du fichier ;
-- partage natif du fichier lorsque `navigator.share` et `navigator.canShare` l'autorisent ;
-- traitement local uniquement dans cette version.
+1. Upload direct dans Vercel Blob privé.
+2. FFmpeg crée une copie d'analyse légère (360×640, 8 fps) et une piste WAV mono.
+3. Dans le navigateur, Kiz Memory mesure les variations d'image et l'énergie audio.
+4. Quand MediaPipe est disponible, le modèle **Pose Landmarker Lite** détecte jusqu'à deux corps et mesure présence, cadrage, déplacement et variation d'orientation.
+5. Un classement interne déterministe combine les mesures. Les scores ne sont pas affichés à l'utilisateur.
+6. Kiz Memory choisit plusieurs fenêtres espacées, puis FFmpeg découpe réellement la vidéo source et assemble la Memory.
+7. Sortie : MP4 H.264/AAC, 1080×1920, `faststart`.
+8. Source + fichiers d'analyse temporaires sont supprimés après le rendu. Le résultat est temporaire et supprimable via RECOMMENCER / nettoyage automatique.
 
-## Ce qui a été supprimé
+## Mode de secours honnête
 
-- score « vibe » ;
-- `Math.random()` présenté comme analyse ;
-- faux « meilleurs moments » ;
-- timestamps fixes 8/22/38/56/73/88 % ;
-- labels fictifs « Golden moment », « Danse intense », etc. ;
-- choix Soirée / Workshop / Freestyle ;
-- choix 15 / 30 / 60 secondes ;
-- faux écran « Résumé IA » ;
-- boutons Instagram/TikTok qui ne ciblaient pas réellement ces applications ;
-- génération Canvas/WebM présentée comme montage intelligent.
+Si le modèle MediaPipe ne peut pas être chargé (réseau, navigateur, CDN), Kiz Memory continue avec **mouvement mesuré + musique mesurée**. Dans ce cas l'interface ne prétend pas avoir utilisé l'IA de pose.
 
-## Limite volontaire de V4.0.3
+## MediaPipe et confidentialité
 
-Cette version **ne prétend pas encore sélectionner les meilleurs passages** et ne génère pas encore le MP4 final de la future V1. Elle sert de base UX/entrée/sortie honnête avant le branchement du vrai moteur d'analyse mesurable et du pipeline FFmpeg.
+Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose Landmarker s'exécute dans le navigateur sur la copie légère. Selon la documentation MediaPipe, les données d'entrée ne sont pas envoyées à Google par l'API Tasks, mais des métriques de performance/utilisation peuvent être envoyées par MediaPipe.
 
-## Étape suivante
+## Fichiers importants
 
-V4.1 : analyse mesurable des images et de l'audio, sans score aléatoire ni affirmation invérifiable.
+- `app.js` : sélection, MediaPipe, mouvement, audio, partage.
+- `api/prepare.js` : création du proxy et du WAV.
+- `api/render.js` : découpe/concat FFmpeg.
+- `api/upload-url.js` : upload privé signé.
+- `api/cleanup*.js` : confidentialité et nettoyage.
+- `SETUP-VERCEL.md` : configuration.
 
+## Limites V4.2
 
-## Correctif V4.0.3.2
-- validation des métadonnées vidéo plus robuste sur mobile ;
-- délai de lecture porté à 45 s ;
-- élément vidéo de contrôle attaché au DOM pour les navigateurs mobiles ;
-- gestion des durées 0/Infinity ;
-- diagnostic HEVC/H.265 sans présenter le fichier comme corrompu.
-
-
-## Correctif V4.0.3
-- L’import ne dépend plus d’un test de décodage navigateur bloquant.
-- Les fichiers MP4 mobiles sont acceptés dès lors qu’ils sont non vides et de type vidéo.
-- L’aperçu tente ensuite la lecture sans invalider le fichier en cas d’échec du moteur média du navigateur.
-
-
-## V4.0.3
-- numéro de version visible à l’écran ;
-- cache navigateur/Vercel neutralisé pendant les tests ;
-- aperçu chargé seulement après affichage du lecteur ;
-- le File Android est conservé jusqu’à la création du Blob URL ;
-- un échec d’aperçu ne rejette jamais la vidéo.
+- Le modèle de pose n'identifie pas la qualité artistique de la danse et ne prétend pas connaître les « meilleurs moments » au sens humain.
+- La sélection repose sur des critères mesurables : mouvement, variations, présence/cadrage corporel quand disponible, rotation approximée du torse et énergie audio.
+- Les grosses vidéos 4K peuvent demander plusieurs minutes de traitement serveur.

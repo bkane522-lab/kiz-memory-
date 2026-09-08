@@ -1,7 +1,15 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/prepare.js": { "maxDuration": 300 },
+    "api/render.js": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/cleanup-stale", "schedule": "20 4 * * *" }
+  ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, max-age=0" }
       ]

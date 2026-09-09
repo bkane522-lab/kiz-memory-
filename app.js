@@ -1,4 +1,4 @@
-const APP_VERSION = "4.2.5";
+const APP_VERSION = "4.2.6";
 const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
 const CLIENT_UPLOAD_ROUTE = "/api/client-upload";
 const MEDIAPIPE_VERSION = "1.0.1";
@@ -89,7 +89,7 @@ async function handleFileSelection(event) {
 
   if (file.size > 1024 * 1024 * 1024) {
     input.value = "";
-    toast("Pour cette V4.2.5, la taille maximale est de 1 Go.");
+    toast("Pour cette V4.2.6, la taille maximale est de 1 Go.");
     return;
   }
 
@@ -428,7 +428,7 @@ async function createMemory() {
     const sourceBlob = state.sourceBlob;
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
-    // V4.2.5 : l'upload multipart est la voie principale.
+    // V4.2.6 : l'upload multipart est la voie principale.
     // On ne crée plus d'URL PUT signée avant de savoir si elle est nécessaire.
     const preferredPath = buildSourcePath(state.sourceName);
     let uploaded;
@@ -1265,6 +1265,13 @@ function mimeFromFilename(name = "") {
   if (lower.endsWith(".3gp")) return "video/3gpp";
   if (lower.endsWith(".mkv")) return "video/x-matroska";
   return "video/mp4";
+}
+
+function inferExtension(filename = "", mimeType = "") {
+  const match = String(filename).toLowerCase().match(/\.([a-z0-9]{2,5})$/);
+  const candidate = match?.[1] || "";
+  if (["mp4", "mov", "m4v", "webm", "3gp", "mkv"].includes(candidate)) return candidate;
+  return extensionFromMime(mimeType);
 }
 
 function extensionFromMime(mimeType = "") {

@@ -1,4 +1,5 @@
-const APP_VERSION = "4.3";
+const APP_VERSION = "4.3.1";
+const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
@@ -29,6 +30,7 @@ const state = {
 
 let wakeLock = null;
 let wakeLockWanted = false;
+let blobClientModulePromise = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -394,21 +396,28 @@ async function createMemory() {
   try {
     const sourceBlob = state.sourceBlob;
     $("#processingText").textContent = "Libération de l’espace temporaire…";
-    const storage = await requestStorageMaintenance(sourceBlob.size);
-    if (!storage?.enoughSpace) {
-      throw new Error(`Espace Blob gratuit insuffisant (${formatBytes(storage?.usedBytes || 0)} utilisés).`);
+    try {
+      const storage = await requestStorageMaintenance(sourceBlob.size);
+      if (storage && storage.enoughSpace === false) {
+        throw new Error(`Espace Blob gratuit insuffisant (${formatBytes(storage?.usedBytes || 0)} utilisés).`);
+      }
+    } catch (maintenanceError) {
+      if (/Espace Blob gratuit insuffisant/i.test(String(maintenanceError?.message || maintenanceError))) throw maintenanceError;
+      console.warn("Storage maintenance unavailable; upload continues", maintenanceError);
     }
 
     $("#uploadProgressWrap").hidden = false;
     $("#processingText").textContent = "Transfert privé sécurisé — gardez Kiz Memory ouverte…";
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
-    // V4.3 : upload multipart reprenable via URL signée OIDC, sans service payant.
-    // Aucun BLOB_READ_WRITE_TOKEN permanent n'est requis.
-    const ticket = await requestUploadUrl();
-    state.sourcePath = ticket.pathname;
-    cleanupOnFailure.add(ticket.pathname);
-    await uploadWithProgress(sourceBlob, ticket.presignedUrl, reportUploadProgress);
+    // V4.3.1 : SDK officiel Vercel Blob + multipart presigné OIDC.
+    // Le SDK découpe le fichier, envoie les parties en parallèle et réessaie les parties réseau en échec.
+    const uploaded = await uploadSourceWithProgress(sourceBlob, reportUploadProgress);
+    if (!uploaded?.pathname || !isSafeBlobPath(uploaded.pathname)) {
+      throw new Error("Le stockage privé n’a pas confirmé le chemin de la vidéo.");
+    }
+    state.sourcePath = uploaded.pathname;
+    cleanupOnFailure.add(uploaded.pathname);
 
     setStep("stepUploaded", true, "✓");
     $("#uploadProgressWrap").hidden = true;
@@ -501,271 +510,37 @@ async function requestStorageMaintenance(requiredBytes) {
   return data;
 }
 
-const UPLOAD_SESSION_KEY = "kiz-memory-upload-v4.3";
-const UPLOAD_PART_SIZE = 8 * 1024 * 1024;
-const UPLOAD_CONCURRENCY = 3;
-const UPLOAD_MAX_RETRIES = 4;
-
-function uploadFingerprint(blob) {
-  return [state.sourceName || "video", blob?.size || 0, state.sourceMime || blob?.type || "", Number(blob?.lastModified || 0)].join("|");
-}
-
-function readUploadSession(blob) {
-  try {
-    const raw = localStorage.getItem(UPLOAD_SESSION_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw);
-    if (!session || session.fingerprint !== uploadFingerprint(blob)) return null;
-    if (!isSafeBlobPath(session.pathname) || !session.uploadId || !session.key) return null;
-    return session;
-  } catch {
-    return null;
+async function getBlobClientModule() {
+  if (!blobClientModulePromise) {
+    blobClientModulePromise = import(BLOB_CLIENT_MODULE_URL).catch((error) => {
+      blobClientModulePromise = null;
+      throw error;
+    });
   }
+  return blobClientModulePromise;
 }
 
-function writeUploadSession(session) {
+async function uploadSourceWithProgress(blob, onProgress) {
+  const { uploadPresigned } = await getBlobClientModule();
+  if (typeof uploadPresigned !== "function") {
+    throw new Error("Le module de transfert Vercel Blob n’est pas disponible.");
+  }
+
+  const pathname = buildSourcePath(state.sourceName);
   try {
-    localStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify({ ...session, updatedAt: Date.now() }));
+    return await uploadPresigned(pathname, blob, {
+      access: "private",
+      handleUploadUrl: "/api/client-upload-presigned",
+      multipart: true,
+      contentType: state.sourceMime || blob.type || "application/octet-stream",
+      onUploadProgress: onProgress
+    });
   } catch (error) {
-    console.warn("Upload session persistence unavailable", error);
-  }
-}
-
-function clearUploadSession() {
-  try { localStorage.removeItem(UPLOAD_SESSION_KEY); } catch {}
-}
-
-async function requestUploadUrl() {
-  const blob = state.sourceBlob;
-  const session = blob ? readUploadSession(blob) : null;
-  const response = await fetch("/api/upload-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: state.sourceName,
-      contentType: state.sourceMime || "video/mp4",
-      size: blob?.size || 0,
-      pathname: session?.pathname || undefined
-    })
-  });
-  const data = await readJsonSafely(response);
-  if (!response.ok) throw new Error(data?.error || "Impossible de préparer le stockage privé.");
-  if (!data?.presignedUrl || !data?.pathname) throw new Error("Configuration du stockage incomplète.");
-  return { ...data, resumeSession: session };
-}
-
-function multipartUrlFromPresigned(url) {
-  const parsed = new URL(url);
-  parsed.pathname = parsed.pathname.replace(/\/$/, "") + "/mpu";
-  return parsed.toString();
-}
-
-function parseStoreIdFromPresignedUrl(presignedUrl) {
-  try {
-    const url = new URL(presignedUrl);
-    const delegation = url.searchParams.get("vercel-blob-delegation");
-    if (!delegation) return "";
-    const payloadSegment = delegation.split(".")[0] || "";
-    let base64 = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
-    while (base64.length % 4) base64 += "=";
-    const payload = JSON.parse(atob(base64));
-    return String(payload?.storeId || "").replace(/^store_/, "");
-  } catch (error) {
-    console.warn("Unable to read Blob store id from signed delegation", error);
-    return "";
-  }
-}
-
-function multipartHeaders(contentType, presignedUrl) {
-  const storeId = parseStoreIdFromPresignedUrl(presignedUrl);
-  if (!storeId) throw new Error("La délégation Blob signée ne contient pas l’identifiant du stockage.");
-  return {
-    "x-api-version": "12",
-    "x-vercel-blob-store-id": storeId,
-    "x-api-blob-request-id": `${storeId}:${Date.now()}:${globalThis.crypto?.randomUUID?.() || Math.round(performance.now() * 1000)}`,
-    "x-api-blob-request-attempt": "0",
-    "x-vercel-blob-access": "private",
-    "x-content-type": contentType || "application/octet-stream",
-    "x-add-random-suffix": "0",
-    "x-allow-overwrite": "0"
-  };
-}
-
-async function parseUploadResponse(response) {
-  const raw = await response.text();
-  let data = null;
-  try { data = raw ? JSON.parse(raw) : null; } catch {}
-  if (!response.ok) {
-    const error = new Error(data?.error?.message || data?.error || data?.message || `Vercel Blob HTTP ${response.status}`);
-    error.status = response.status;
+    const text = String(error?.message || error || "");
+    if (/failed to fetch|network|load failed|service is currently not available/i.test(text)) {
+      throw new Error("Connexion interrompue pendant le transfert. Gardez Kiz Memory ouverte puis réessayez la même vidéo.");
+    }
     throw error;
-  }
-  return data || {};
-}
-
-async function createMultipartUpload(url, contentType) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { ...multipartHeaders(contentType, url), "x-mpu-action": "create" }
-  });
-  const data = await parseUploadResponse(response);
-  if (!data.uploadId || !data.key) throw new Error("Vercel Blob n’a pas créé la session multipart.");
-  return data;
-}
-
-function uploadPartXhr(url, chunk, headers, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url, true);
-    xhr.timeout = 20 * 60 * 1000;
-    Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable) onProgress?.(event.loaded);
-    });
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        let data = null;
-        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch {}
-        const etag = data?.etag || xhr.getResponseHeader("etag");
-        if (!etag) return reject(new Error("Vercel Blob n’a pas renvoyé l’ETag de la partie."));
-        resolve({ etag, partNumber: Number(headers["x-mpu-part-number"]) });
-        return;
-      }
-      const error = new Error(`Partie refusée par Vercel Blob (${xhr.status}).`);
-      error.status = xhr.status;
-      reject(error);
-    });
-    xhr.addEventListener("error", () => reject(new Error("Réseau interrompu pendant l’envoi d’une partie.")));
-    xhr.addEventListener("timeout", () => reject(new Error("Une partie a dépassé le temps d’envoi autorisé.")));
-    xhr.addEventListener("abort", () => reject(new Error("Envoi interrompu.")));
-    xhr.send(chunk);
-  });
-}
-
-async function uploadPartWithRetry(args) {
-  let lastError;
-  for (let attempt = 1; attempt <= UPLOAD_MAX_RETRIES; attempt++) {
-    try {
-      return await uploadPartXhr(
-        args.url,
-        args.chunk,
-        { ...args.headers, "x-api-blob-request-attempt": String(attempt - 1) },
-        args.onProgress
-      );
-    } catch (error) {
-      lastError = error;
-      if ([400, 404, 409].includes(Number(error?.status))) throw error;
-      if (attempt < UPLOAD_MAX_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, 700 * (2 ** (attempt - 1))));
-      }
-    }
-  }
-  throw lastError || new Error("Échec de l’envoi multipart.");
-}
-
-async function completeMultipartUpload(url, session, parts, contentType) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      ...multipartHeaders(contentType, url),
-      "content-type": "application/json",
-      "x-mpu-action": "complete",
-      "x-mpu-upload-id": session.uploadId,
-      "x-mpu-key": encodeURIComponent(session.key)
-    },
-    body: JSON.stringify(parts.sort((a, b) => a.partNumber - b.partNumber))
-  });
-  return parseUploadResponse(response);
-}
-
-async function uploadWithProgress(blob, presignedUrl, onProgress) {
-  const mpuUrl = multipartUrlFromPresigned(presignedUrl);
-  const contentType = state.sourceMime || blob.type || "application/octet-stream";
-  let session = readUploadSession(blob);
-
-  if (!session || session.pathname !== state.sourcePath) {
-    const created = await createMultipartUpload(mpuUrl, contentType);
-    session = {
-      fingerprint: uploadFingerprint(blob),
-      pathname: state.sourcePath,
-      uploadId: created.uploadId,
-      key: created.key,
-      partSize: UPLOAD_PART_SIZE,
-      parts: [],
-      createdAt: Date.now()
-    };
-    writeUploadSession(session);
-  }
-
-  const partCount = Math.ceil(blob.size / UPLOAD_PART_SIZE);
-  const completed = new Map(
-    (Array.isArray(session.parts) ? session.parts : [])
-      .filter((part) => Number.isInteger(part?.partNumber) && part.partNumber >= 1 && part.partNumber <= partCount && part.etag)
-      .map((part) => [part.partNumber, { etag: part.etag, partNumber: part.partNumber }])
-  );
-  const inFlight = new Map();
-
-  const partBytes = (partNumber) => {
-    const start = (partNumber - 1) * UPLOAD_PART_SIZE;
-    return Math.max(0, Math.min(UPLOAD_PART_SIZE, blob.size - start));
-  };
-  const completedBytes = () => [...completed.keys()].reduce((sum, partNumber) => sum + partBytes(partNumber), 0);
-  const report = () => {
-    const loaded = Math.min(blob.size, completedBytes() + [...inFlight.values()].reduce((sum, value) => sum + value, 0));
-    onProgress?.({ loaded, total: blob.size, percentage: blob.size ? (loaded / blob.size) * 100 : 0 });
-  };
-  report();
-
-  const queue = [];
-  for (let partNumber = 1; partNumber <= partCount; partNumber++) {
-    if (!completed.has(partNumber)) queue.push(partNumber);
-  }
-  let cursor = 0;
-
-  async function worker() {
-    while (cursor < queue.length) {
-      const partNumber = queue[cursor++];
-      const start = (partNumber - 1) * UPLOAD_PART_SIZE;
-      const end = Math.min(blob.size, start + UPLOAD_PART_SIZE);
-      const chunk = blob.slice(start, end, "application/octet-stream");
-      const headers = {
-        ...multipartHeaders(contentType, mpuUrl),
-        "x-mpu-action": "upload",
-        "x-mpu-key": encodeURIComponent(session.key),
-        "x-mpu-upload-id": session.uploadId,
-        "x-mpu-part-number": String(partNumber),
-        "x-content-length": String(chunk.size)
-      };
-      const part = await uploadPartWithRetry({
-        url: mpuUrl,
-        chunk,
-        headers,
-        onProgress: (loaded) => {
-          inFlight.set(partNumber, Math.min(chunk.size, loaded));
-          report();
-        }
-      });
-      inFlight.delete(partNumber);
-      completed.set(partNumber, part);
-      session.parts = [...completed.values()].sort((a, b) => a.partNumber - b.partNumber);
-      writeUploadSession(session);
-      report();
-    }
-  }
-
-  try {
-    await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, Math.max(1, queue.length)) }, () => worker()));
-    const result = await completeMultipartUpload(mpuUrl, session, [...completed.values()], contentType);
-    clearUploadSession();
-    onProgress?.({ loaded: blob.size, total: blob.size, percentage: 100 });
-    return result;
-  } catch (error) {
-    if ([400, 404, 409].includes(Number(error?.status))) {
-      clearUploadSession();
-      throw new Error("La session d’envoi a expiré. Sélectionnez à nouveau la même vidéo pour repartir proprement.");
-    }
-    writeUploadSession(session);
-    throw new Error("Envoi interrompu. Rouvrez Kiz Memory puis sélectionnez à nouveau la même vidéo : les parties déjà envoyées seront reprises.");
   }
 }
 
@@ -1472,6 +1247,9 @@ async function readJsonSafely(response) {
 
 function friendlyProcessingError(error) {
   const raw = String(error?.message || error || "").trim();
+  if (/Failed to fetch|NetworkError|Load failed|connexion interrompue/i.test(raw)) {
+    return "Connexion interrompue pendant le transfert. Gardez Kiz Memory ouverte et réessayez la même vidéo.";
+  }
   if (/not configured|non configur|BLOB_READ_WRITE_TOKEN|OIDC.*(missing|absent|invalid)|no blob store/i.test(raw)) {
     return "Le stockage vidéo privé n’est pas accessible depuis ce déploiement Vercel.";
   }

@@ -1,4 +1,4 @@
-# Installation Vercel — Kiz Memory V4.3
+# Installation Vercel — Kiz Memory V4.3.1
 
 ## Prérequis déjà en place
 
@@ -9,9 +9,9 @@
 
 ## Déploiement
 
-1. Remplacer les fichiers du projet par le contenu du ZIP V4.3.
+1. Remplacer les fichiers du projet par le contenu du ZIP V4.3.1.
 2. Déployer / Redeploy sur Vercel.
-3. Vérifier que l'accueil affiche `V4.3`.
+3. Vérifier que l'accueil affiche `V4.3.1`.
 4. Tester d'abord avec une vidéo courte, puis avec une vidéo longue.
 
 ## Test de reprise d'upload

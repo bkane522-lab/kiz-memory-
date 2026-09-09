@@ -36,7 +36,7 @@ export default async function handler(req, res) {
           allowOverwrite: false,
           validUntil: Date.now() + 2 * 60 * 60 * 1000,
           tokenPayload: JSON.stringify({
-            version: '4.2.5',
+            version: '4.2.6',
             multipart: Boolean(multipart),
             size: payload.size || null
           })

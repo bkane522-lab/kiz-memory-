@@ -1,4 +1,4 @@
-const APP_VERSION = "4.3.2";
+const APP_VERSION = "4.4";
 const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -11,10 +11,8 @@ const state = {
   sourceMime: "",
   sourcePath: "",
   proxyPath: "",
-  resultUrl: "",
-  resultPath: "",
-  resultBlob: null,
-  resultName: "kiz-memory.mp4",
+  memories: [],
+  memoryBlobCache: new Map(),
   cameraStream: null,
   recorder: null,
   recordedChunks: [],
@@ -43,7 +41,7 @@ const cameraMessage = $("#cameraMessage");
 const recordBtn = $("#recordBtn");
 const recordLabel = $("#recordLabel");
 const recTime = $("#recTime");
-const resultVideo = $("#resultVideo");
+const memoryList = $("#memoryList");
 const analysisVideo = $("#analysisVideo");
 const analysisCanvas = $("#analysisCanvas");
 const toastEl = $("#toast");
@@ -111,7 +109,8 @@ function setSource(blob, name, mimeType = "") {
   state.sourceMime = mimeType || blob.type || "";
   state.sourcePath = "";
   state.proxyPath = "";
-  state.resultBlob = null;
+  state.memories = [];
+  state.memoryBlobCache = new Map();
   state.analysisMode = "";
   state.segments = [];
 }
@@ -410,7 +409,7 @@ async function createMemory() {
     $("#processingText").textContent = "Transfert privé sécurisé — gardez Kiz Memory ouverte…";
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
-    // V4.3.2 : SDK officiel Vercel Blob + multipart presigné OIDC.
+    // V4.4 : SDK officiel Vercel Blob + multipart presigné OIDC.
     // Le SDK découpe le fichier, envoie les parties en parallèle et réessaie les parties réseau en échec.
     const uploaded = await uploadSourceWithProgress(sourceBlob, reportUploadProgress);
     if (!uploaded?.pathname || !isSafeBlobPath(uploaded.pathname)) {
@@ -440,18 +439,17 @@ async function createMemory() {
     state.segments = analysis.segments;
     setStep("stepAnalyzed", true, "✓");
 
-    $("#processingText").textContent = `Découpe automatique de ${analysis.segments.length} passages et assemblage…`;
+    $("#processingText").textContent = `Création de ${analysis.segments.length} Memories séparées…`;
     const rendered = await requestRender(analysis);
     setStep("stepRendered", true, "✓");
 
-    state.resultUrl = rendered.resultUrl;
-    state.resultPath = rendered.resultPath;
-    state.resultName = rendered.filename || buildResultFilename(state.sourceName);
+    state.memories = Array.isArray(rendered.memories) ? rendered.memories : [];
+    state.memoryBlobCache = new Map();
     state.sourcePath = "";
     state.proxyPath = "";
     cleanupOnFailure.clear();
 
-    $("#processingText").textContent = "Memory prête.";
+    $("#processingText").textContent = "Memories prêtes.";
     setStep("stepReady", true, "✓");
     await nextPaint();
     showServerResult(rendered, analysis);
@@ -874,7 +872,7 @@ function scoreSamples(samples, mode) {
 }
 function selectSegments(samples, duration) {
   const plan = memoryPlan(duration);
-  if (!samples.length) return deterministicFallbackSegments(duration, plan.count, plan.clipDuration);
+  if (!samples.length) return deterministicFallbackSegments(duration, plan);
 
   const candidates = samples
     .filter((sample) => sample.t >= 2 && sample.t <= duration - 2)
@@ -882,40 +880,65 @@ function selectSegments(samples, duration) {
     .sort((a, b) => b.smoothScore - a.smoothScore || a.t - b.t);
 
   const selected = [];
-  const minCenterDistance = plan.clipDuration + 2.0;
   for (const candidate of candidates) {
     if (selected.length >= plan.count) break;
-    if (selected.every((item) => Math.abs(item.center - candidate.center) >= minCenterDistance)) {
-      selected.push(candidate);
-    }
+    const clipDuration = chooseClipDuration(plan, selected.length);
+    const window = buildClipWindow(candidate.center, clipDuration, duration, samples);
+    const separated = selected.every((item) => window.end + 1.25 <= item.start || window.start >= item.end + 1.25);
+    if (separated) selected.push({ ...window, score: candidate.smoothScore });
   }
 
   if (selected.length < plan.count) {
     for (const candidate of candidates) {
       if (selected.length >= plan.count) break;
-      if (selected.some((item) => Math.abs(item.center - candidate.center) < plan.clipDuration * 0.72)) continue;
-      selected.push(candidate);
+      const clipDuration = chooseClipDuration(plan, selected.length);
+      const window = buildClipWindow(candidate.center, clipDuration, duration, samples);
+      const separated = selected.every((item) => window.end + 0.35 <= item.start || window.start >= item.end + 0.35);
+      if (separated) selected.push({ ...window, score: candidate.smoothScore });
     }
   }
 
-  if (!selected.length) return deterministicFallbackSegments(duration, plan.count, plan.clipDuration);
-
-  const segments = selected.map((candidate) => {
-    let start = candidate.center - plan.clipDuration / 2;
-    start = Math.max(0, Math.min(start, Math.max(0, duration - plan.clipDuration)));
-    const end = Math.min(duration, start + plan.clipDuration);
-    return { start: round3(start), end: round3(end) };
-  }).sort((a, b) => a.start - b.start);
-
-  return mergeOverlappingSegments(segments, 0.25).slice(0, plan.count);
+  if (!selected.length) return deterministicFallbackSegments(duration, plan);
+  return selected
+    .sort((a, b) => a.start - b.start)
+    .slice(0, plan.count)
+    .map(({ start, end }) => ({ start: round3(start), end: round3(end) }));
 }
 
 function memoryPlan(duration) {
-  if (duration <= 25) return { count: 2, clipDuration: Math.max(4, Math.min(6, duration / 3)) };
-  if (duration <= 60) return { count: 3, clipDuration: 6 };
-  if (duration <= 135) return { count: 5, clipDuration: 6.5 };
-  if (duration <= 240) return { count: 6, clipDuration: 6.5 };
-  return { count: 6, clipDuration: 7 };
+  if (duration <= 15) return { count: 1, durations: [Math.max(2, Math.round(duration))] };
+  if (duration <= 30) return { count: 1, durations: [Math.min(25, Math.round(duration))] };
+  if (duration <= 60) return { count: 2, durations: [17, 19] };
+  if (duration <= 120) return { count: 3, durations: [17, 19, 25] };
+  if (duration <= 240) return { count: 4, durations: [17, 19, 25, 30] };
+  return { count: 5, durations: [17, 19, 22, 25, 30] };
+}
+
+function chooseClipDuration(plan, selectedIndex) {
+  const durations = Array.isArray(plan?.durations) && plan.durations.length ? plan.durations : [20];
+  return durations[Math.min(selectedIndex, durations.length - 1)];
+}
+
+function buildClipWindow(center, targetDuration, duration, samples) {
+  const safeDuration = Math.min(targetDuration, duration);
+  const proposedStart = Math.max(0, Math.min(center - safeDuration * 0.45, Math.max(0, duration - safeDuration)));
+  let start = snapBoundaryToQuietMoment(proposedStart, samples, 2.0, 0, Math.max(0, duration - safeDuration));
+  start = Math.max(0, Math.min(start, Math.max(0, duration - safeDuration)));
+  const end = Math.min(duration, start + safeDuration);
+  return { start: round3(start), end: round3(end) };
+}
+
+function snapBoundaryToQuietMoment(target, samples, radius, min, max) {
+  const nearby = samples.filter((sample) => sample.t >= Math.max(min, target - radius) && sample.t <= Math.min(max, target + radius));
+  if (!nearby.length) return Math.max(min, Math.min(max, target));
+  nearby.sort((a, b) => boundaryCost(a) - boundaryCost(b) || Math.abs(a.t - target) - Math.abs(b.t - target));
+  return Math.max(min, Math.min(max, nearby[0].t));
+}
+
+function boundaryCost(sample) {
+  const motion = clamp01(sample?.smoothScore ?? sample?.score ?? sample?.frameDiff ?? 0);
+  const audio = clamp01(sample?.audio ?? 0);
+  return 0.62 * motion + 0.38 * audio;
 }
 
 function snapToAudioPeak(center, samples) {
@@ -926,13 +949,16 @@ function snapToAudioPeak(center, samples) {
   return best.audio >= 0.55 ? best.t : center;
 }
 
-function deterministicFallbackSegments(duration, count, clipDuration) {
-  const safeCount = Math.max(1, Math.min(count, Math.floor(duration / Math.max(2, clipDuration)) || 1));
+function deterministicFallbackSegments(duration, plan) {
+  const durations = (plan.durations || [20]).map((value) => Math.min(duration, Math.max(2, value)));
+  const averageDuration = durations.reduce((sum, value) => sum + value, 0) / durations.length;
+  const safeCount = Math.max(1, Math.min(plan.count, Math.floor(duration / Math.max(8, averageDuration)) || 1));
   const segments = [];
   for (let i = 0; i < safeCount; i++) {
+    const target = durations[Math.min(i, durations.length - 1)];
     const center = (duration * (i + 1)) / (safeCount + 1);
-    const start = Math.max(0, Math.min(center - clipDuration / 2, Math.max(0, duration - clipDuration)));
-    segments.push({ start: round3(start), end: round3(Math.min(duration, start + clipDuration)) });
+    const start = Math.max(0, Math.min(center - target / 2, Math.max(0, duration - target)));
+    segments.push({ start: round3(start), end: round3(Math.min(duration, start + target)) });
   }
   return segments;
 }
@@ -963,24 +989,23 @@ async function requestRender(analysis) {
     })
   });
   const data = await readJsonSafely(response);
-  if (!response.ok) throw new Error(data?.error || "La Memory n’a pas pu être assemblée.");
-  if (!data?.resultUrl || !data?.resultPath) throw new Error("Le serveur n’a pas renvoyé la Memory finale.");
+  if (!response.ok) throw new Error(data?.error || "Les Memories n’ont pas pu être créées.");
+  if (!Array.isArray(data?.memories) || !data.memories.length) throw new Error("Le serveur n’a renvoyé aucune Memory.");
   releaseAnalysisObjectUrls();
   return data;
 }
 
 function showServerResult(rendered, analysis) {
   go("result");
-  resultVideo.pause();
-  resultVideo.removeAttribute("src");
-  resultVideo.src = state.resultUrl;
-  resultVideo.load();
+  state.memories = rendered.memories;
+  state.memoryBlobCache = new Map();
+  memoryList.innerHTML = "";
 
-  const parts = ["MP4", "H.264", "AAC", "1080 × 1920"];
+  const parts = ["Clips séparés", "MP4", "H.264", rendered.audioCodec ? "AAC" : "sans audio", "1080 × 1920"];
   if (rendered.outputBytes) parts.push(formatFileSize(rendered.outputBytes));
   $("#videoInfo").textContent = parts.join(" · ");
   $("#previewStatus").className = "preview-status ok";
-  $("#previewStatus").textContent = "Memory découpée automatiquement et prête à être lue.";
+  $("#previewStatus").textContent = "Aucun recollage : chaque Memory est une vidéo indépendante prête à partager.";
 
   const modeLabels = {
     "pose+motion+audio": "IA de pose + mouvement + musique",
@@ -989,61 +1014,130 @@ function showServerResult(rendered, analysis) {
     "motion": "mouvement"
   };
   const modeLabel = modeLabels[analysis.mode] || "analyse mesurable";
-  const seconds = analysis.segments.reduce((sum, segment) => sum + (segment.end - segment.start), 0);
-  $("#selectionSummary").textContent = `${analysis.segments.length} passages · ${Math.round(seconds)} s · ${modeLabel}`;
+  const seconds = rendered.memories.reduce((sum, memory) => sum + (Number(memory.duration) || 0), 0);
+  $("#selectionSummary").textContent = `${rendered.memories.length} Memories séparées · ${Math.round(seconds)} s au total · ${modeLabel}`;
 
-  resultVideo.addEventListener("error", () => {
-    const code = resultVideo.error?.code || 0;
-    $("#previewStatus").className = "preview-status warn";
-    $("#previewStatus").textContent = `La Memory existe, mais ce lecteur n’a pas démarré${code ? ` (code ${code})` : ""}. ENREGISTRER reste disponible.`;
-  }, { once: true });
+  rendered.memories.forEach((memory, index) => memoryList.appendChild(buildMemoryCard(memory, index)));
 }
 
-$("#watchBtn").addEventListener("click", async () => {
-  if (!state.resultUrl) return;
-  try { resultVideo.currentTime = 0; } catch {}
-  await resultVideo.play().catch(() => toast("Touchez directement la vidéo pour lancer la lecture."));
-});
+function buildMemoryCard(memory, index) {
+  const card = document.createElement("article");
+  card.className = "memory-card";
+  card.dataset.memoryIndex = String(index);
 
-$("#saveBtn").addEventListener("click", async () => {
-  if (!state.resultUrl) return;
-  try {
-    toast("Préparation du fichier MP4…", 2200);
-    const blob = await getResultBlob();
-    downloadBlob(blob, state.resultName || "kiz-memory.mp4");
-  } catch (error) {
-    console.warn("Save failed", error);
-    toast("Impossible d’enregistrer la vidéo pour le moment.");
+  const head = document.createElement("div");
+  head.className = "memory-card-head";
+  const title = document.createElement("strong");
+  title.textContent = `MEMORY ${index + 1}`;
+  const duration = document.createElement("span");
+  duration.textContent = `${Math.round(Number(memory.duration) || 0)} s`;
+  head.append(title, duration);
+
+  const frame = document.createElement("div");
+  frame.className = "memory-video";
+  const video = document.createElement("video");
+  video.playsInline = true;
+  video.controls = true;
+  video.preload = "metadata";
+  video.src = memory.resultUrl;
+  video.addEventListener("error", () => {
+    status.textContent = "Le lecteur n’a pas démarré. ENREGISTRER reste disponible.";
+  }, { once: true });
+  frame.appendChild(video);
+
+  const actions = document.createElement("div");
+  actions.className = "memory-actions";
+  actions.append(
+    memoryActionButton("watch", index, "▶️", "REGARDER", true),
+    memoryActionButton("share", index, "📱", "PARTAGER", false),
+    memoryActionButton("save", index, "💾", "ENREGISTRER", false)
+  );
+
+  const status = document.createElement("p");
+  status.className = "memory-card-status";
+  status.textContent = "Clip indépendant · prêt à partager";
+
+  card.append(head, frame, actions, status);
+  return card;
+}
+
+function memoryActionButton(action, index, icon, label, primary) {
+  const button = document.createElement("button");
+  button.className = `${primary ? "primary-action" : "secondary-action"} compact-action`;
+  button.dataset.memoryAction = action;
+  button.dataset.memoryIndex = String(index);
+  const span = document.createElement("span");
+  span.setAttribute("aria-hidden", "true");
+  span.textContent = icon;
+  const strong = document.createElement("strong");
+  strong.textContent = label;
+  button.append(span, strong);
+  return button;
+}
+
+memoryList.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-memory-action]");
+  if (!button) return;
+  const index = Number(button.dataset.memoryIndex);
+  const memory = state.memories[index];
+  if (!memory) return;
+  const action = button.dataset.memoryAction;
+  const card = button.closest(".memory-card");
+  const video = card?.querySelector("video");
+
+  if (action === "watch") {
+    if (!video) return;
+    try { video.currentTime = 0; } catch {}
+    await video.play().catch(() => toast("Touchez directement la vidéo pour lancer la lecture."));
+    return;
+  }
+
+  if (action === "save") {
+    try {
+      toast(`Préparation de Memory ${index + 1}…`, 1800);
+      const blob = await getMemoryBlob(index);
+      downloadBlob(blob, memory.filename || `kiz-memory-${index + 1}.mp4`);
+    } catch (error) {
+      console.warn("Memory save failed", error);
+      toast("Impossible d’enregistrer cette Memory pour le moment.");
+    }
+    return;
+  }
+
+  if (action === "share") {
+    await shareMemory(index);
   }
 });
 
-$("#shareBtn").addEventListener("click", shareVideo);
-
-async function shareVideo() {
-  if (!state.resultUrl) return;
+async function shareMemory(index) {
+  const memory = state.memories[index];
+  if (!memory) return;
   try {
-    toast("Préparation du partage…", 2200);
-    const blob = await getResultBlob();
-    const file = new File([blob], state.resultName || "kiz-memory.mp4", { type: "video/mp4" });
+    toast(`Préparation du partage de Memory ${index + 1}…`, 1800);
+    const blob = await getMemoryBlob(index);
+    const file = new File([blob], memory.filename || `kiz-memory-${index + 1}.mp4`, { type: "video/mp4" });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: "Kiz Memory", files: [file] });
+      await navigator.share({ title: `Kiz Memory ${index + 1}`, files: [file] });
       return;
     }
     toast("Le partage direct n’est pas disponible ici. Utilisez ENREGISTRER puis partagez depuis votre galerie.", 5200);
   } catch (error) {
     if (error?.name !== "AbortError") {
-      console.warn("Share failed", error);
-      toast("Le partage n’a pas pu être ouvert. Vous pouvez enregistrer la vidéo.");
+      console.warn("Memory share failed", error);
+      toast("Le partage n’a pas pu être ouvert. Vous pouvez enregistrer cette Memory.");
     }
   }
 }
 
-async function getResultBlob() {
-  if (state.resultBlob) return state.resultBlob;
-  const response = await fetch(state.resultUrl, { cache: "no-store" });
+async function getMemoryBlob(index) {
+  if (state.memoryBlobCache.has(index)) return state.memoryBlobCache.get(index);
+  const memory = state.memories[index];
+  if (!memory?.resultUrl) throw new Error("Memory introuvable.");
+  const response = await fetch(memory.resultUrl, { cache: "no-store" });
   if (!response.ok) throw new Error(`Téléchargement impossible (${response.status}).`);
-  state.resultBlob = await response.blob();
-  return state.resultBlob;
+  const blob = await response.blob();
+  state.memoryBlobCache.set(index, blob);
+  return blob;
 }
 
 function downloadBlob(blob, filename) {
@@ -1063,11 +1157,14 @@ async function resetAndRestart() {
   stopCamera();
   releaseAnalysisObjectUrls();
 
-  resultVideo.pause();
-  resultVideo.removeAttribute("src");
-  resultVideo.load();
+  memoryList.querySelectorAll("video").forEach((video) => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  });
+  memoryList.innerHTML = "";
 
-  const paths = [state.resultPath, state.sourcePath, state.proxyPath].filter(Boolean);
+  const paths = [...state.memories.map((memory) => memory.resultPath), state.sourcePath, state.proxyPath].filter(Boolean);
   for (const path of paths) cleanupPath(path).catch(() => {});
 
   Object.assign(state, {
@@ -1076,10 +1173,8 @@ async function resetAndRestart() {
     sourceMime: "",
     sourcePath: "",
     proxyPath: "",
-    resultUrl: "",
-    resultPath: "",
-    resultBlob: null,
-    resultName: "kiz-memory.mp4",
+    memories: [],
+    memoryBlobCache: new Map(),
     recordedChunks: [],
     recorder: null,
     recording: false,

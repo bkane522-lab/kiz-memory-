@@ -1,77 +1,48 @@
-# Kiz Memory V4.3.2 — Vidéos longues
+# Kiz Memory V4.4 — Memories séparées
 
-V4.3.2 est une version de stabilisation. Elle ne change ni le design principal ni le moteur de sélection IA : elle réduit surtout les transferts et le travail serveur inutiles sur les vidéos longues.
+V4.4 conserve la base technique longue vidéo validée en V4.3.2, mais change le produit final : **Kiz Memory ne recolle plus les passages**.
 
-## Ce qui change
+## Parcours
 
-### 1. Upload multipart reprenable
+Vidéo filmée ou choisie → analyse réelle → plusieurs clips séparés → regarder / partager / enregistrer.
 
-- La vidéo est découpée en parties de 8 Mo.
-- Trois parties maximum sont envoyées en parallèle pour rester raisonnable sur mobile.
-- Chaque partie dispose de plusieurs tentatives automatiques en cas d'erreur réseau.
-- Les parties terminées sont mémorisées localement.
-- Si l'onglet ou le navigateur est interrompu, rouvrir Kiz Memory puis sélectionner **la même vidéo** permet de reprendre les parties déjà terminées tant que la session multipart Vercel est encore valide.
-- L'upload reste direct téléphone → Vercel Blob privé. Le fichier vidéo ne transite pas dans une fonction serverless.
-- Authentification : OIDC du projet Vercel ; aucun `BLOB_READ_WRITE_TOKEN` permanent n'est requis.
+## Résultat V4.4
 
-> Limite du Web : si Android supprime complètement le fichier sélectionné ou si la session multipart Vercel a expiré, l'utilisateur doit sélectionner de nouveau la vidéo et une nouvelle session peut être nécessaire. V4.3.2 ne prétend pas garantir une reprise après n'importe quelle fermeture du système.
+Selon la durée de la vidéo source, Kiz Memory crée automatiquement de 1 à 5 Memories indépendantes. Les vidéos longues utilisent des durées cibles simples et déterministes comme **17 s, 19 s, 25 s et 30 s**. Les clips courts restent adaptés à la durée réellement disponible.
 
-### 2. Préparation FFmpeg en une seule passe
+Chaque Memory :
 
-`api/prepare.js` ne produit plus un proxy vidéo **et** un gros fichier WAV PCM séparé.
+- est un fichier MP4 séparé ;
+- H.264 + AAC lorsque la source contient du son ;
+- 1080 × 1920, 9:16 ;
+- conserve le son original du passage ;
+- peut être regardée, enregistrée ou partagée indépendamment ;
+- n'est jamais concaténée avec une autre Memory.
 
-Une seule passe FFmpeg crée un MP4 d'analyse très léger :
+## Analyse
 
-- 240 × 426 ;
-- 4 images/s ;
-- H.264 ;
-- AAC mono 16 kHz / 32 kb/s lorsque la source contient de l'audio.
+La sélection reste fondée sur des mesures réelles : mouvement, variation, cadrage, énergie audio et MediaPipe Pose lorsque le modèle est disponible. Aucun score aléatoire n'est utilisé.
 
-Le navigateur analyse alors le mouvement, MediaPipe et l'énergie audio à partir de cette seule copie.
+## Vidéos longues
 
-### 3. Rendu des passages uniquement
+- upload direct multipart vers Vercel Blob privé avec `uploadPresigned` ;
+- OIDC du projet, sans `BLOB_READ_WRITE_TOKEN` permanent ;
+- Wake Lock demandé pendant l'envoi et le traitement lorsque le navigateur l'autorise ;
+- une seule copie d'analyse légère : 240 × 426, 4 fps ;
+- l'énergie audio est extraite sous forme de petites métadonnées, sans gros WAV PCM ;
+- `api/render.js` ouvre uniquement les fenêtres temporelles retenues ;
+- aucun concat final : un rendu MP4 par Memory.
 
-`api/render.js` ne télécharge plus toute la source dans le Sandbox avant le montage final.
+## Confidentialité
 
-Le moteur :
-
-1. reçoit les passages retenus ;
-2. ouvre uniquement ces fenêtres temporelles de la source privée ;
-3. encode au maximum 6 petits clips ;
-4. concatène ces clips ;
-5. supprime source + proxy avant d'enregistrer le MP4 final.
-
-La sortie reste MP4 H.264/AAC, 1080 × 1920.
-
-### 4. Nettoyage
-
-Les anciennes routes expérimentales `api/client-upload.js` et `api/getkip` ne font pas partie du ZIP V4.3.2.
+Les sources, proxies et résultats sont stockés dans le Blob privé temporaire. Les sources et proxies sont supprimés pendant le pipeline et les résultats sont nettoyés ensuite par les routes prévues à cet effet.
 
 ## Mode gratuit
 
-La limite produit reste fixée à **900 Mo par vidéo** afin de conserver une marge sous le stockage Blob Hobby de 1 Go pendant les tests. Les fichiers temporaires sont supprimés autant que possible après traitement.
+La taille source reste limitée à 900 Mo pour conserver une marge sous le quota Blob Hobby pendant les tests. Cette limite produit ne garantit pas qu'une vidéo de 900 Mo fonctionnera sur toute connexion ou tout téléphone.
 
-Cette limite est un choix de Kiz Memory V4.3.2 pour le mode gratuit, pas une promesse qu'une vidéo de 900 Mo passera dans toutes les conditions réseau ou tous les téléphones.
+`api/prepare.js` et `api/render.js` conservent `maxDuration: 300` dans `vercel.json`. Kiz Memory signale un échec si le traitement dépasse les ressources disponibles au lieu de prétendre pouvoir traiter sans limite.
 
-## Ce qui ne change pas
+## Sandbox FFmpeg
 
-- aucun score aléatoire ;
-- sélection par mesures réelles ;
-- MediaPipe Pose quand disponible ;
-- mouvement + audio comme repli mesurable ;
-- Blob privé ;
-- interface principale simple ;
-- aucun service payant ajouté.
-
-## Limite de calcul Hobby
-
-V4.3.2 configure `prepare` et `render` à 300 secondes, qui est le maximum actuel des Vercel Functions Hobby avec Fluid Compute. Le pipeline a été réduit pour rester autant que possible sous cette limite, mais une vidéo extrêmement longue ou difficile à transcoder peut encore dépasser 5 minutes de traitement serveur. Dans ce cas, Kiz Memory doit signaler l'échec plutôt que promettre un traitement illimité.
-
-
-## Correctif V4.3.2 — démarrage Sandbox
-
-- FFmpeg est recherché d’abord dans le Sandbox.
-- S’il manque, installation via le gestionnaire système Ubuntu (`apt-get`) au lieu de télécharger une archive tierce.
-- Un `SANDBOX_SNAPSHOT_ID` expiré n’empêche plus le traitement : Kiz Memory retente automatiquement avec un Sandbox propre.
-- `@vercel/sandbox` passe à 3.2.2.
-- 2 vCPU sont utilisés pour limiter la consommation du quota Hobby.
+V4.4 conserve le correctif validé de V4.3.2 : FFmpeg est d'abord recherché dans le Sandbox ; s'il manque, il est installé via le gestionnaire système. Un ancien `SANDBOX_SNAPSHOT_ID` ne bloque pas définitivement le pipeline : le code retente avec un Sandbox propre.

@@ -68,7 +68,7 @@ export default async function handler(req, res) {
       presignedUrl,
       expiresAt: validUntil,
       maxBytes: MAX_BYTES,
-      version: '4.3'
+      version: '4.3.2'
     });
   } catch (error) {
     console.error('upload-url error', error);

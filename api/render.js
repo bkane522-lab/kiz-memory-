@@ -40,12 +40,12 @@ export default async function handler(req, res) {
     const sourceUrl = await signedReadUrl(sourcePath, 30 * 60 * 1000);
 
     sandbox = await createSandbox();
-    await ensureFfmpeg(sandbox);
+    const tools = await ensureFfmpeg(sandbox);
 
     // V4.3: aucun téléchargement intégral de la source. On demande directement
     // à FFmpeg les 2 à 6 petites fenêtres retenues. -ss avant -i permet un seek
     // côté entrée et évite de décoder toute la vidéo depuis zéro pour chaque clip.
-    const hasAudio = await probeRemoteAudio(sandbox, sourceUrl);
+    const hasAudio = await probeRemoteAudio(sandbox, sourceUrl, tools.ffprobe);
     const clipNames = [];
     for (let index = 0; index < segments.length; index++) {
       const segment = segments[index];
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
       else args.push('-an');
       args.push('-movflags', '+faststart', '-max_muxing_queue_size', '1024', clipName);
 
-      const renderClip = await sandbox.runCommand('./ffmpeg', args);
+      const renderClip = await sandbox.runCommand(tools.ffmpeg, args);
       if (renderClip.exitCode !== 0) {
         throw new Error(`FFmpeg clip ${index + 1} failed: ${truncate(await renderClip.stderr())}`);
       }
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
     const writeList = await sandbox.runCommand('bash', ['-c', `cat > concat.txt <<'KIZEOF'\n${concatBody}KIZEOF`]);
     if (writeList.exitCode !== 0) throw new Error('Impossible de préparer la liste des passages.');
 
-    const concat = await sandbox.runCommand('./ffmpeg', [
+    const concat = await sandbox.runCommand(tools.ffmpeg, [
       '-hide_banner', '-loglevel', 'error', '-y',
       '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
       '-c', 'copy', '-movflags', '+faststart', 'output.mp4'
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
       analysisMode,
       renderStrategy: 'selected-segments-only',
       expiresAt: Date.now() + resultTtl,
-      version: '4.3'
+      version: '4.3.2'
     });
   } catch (error) {
     console.error('Kiz Memory render error', error);
@@ -158,29 +158,79 @@ function validateSegments(value) {
 }
 
 async function createSandbox() {
-  const config = {
+  const baseConfig = {
     persistent: false,
     region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
-    resources: { vcpus: 4 }
+    resources: { vcpus: 2 }
   };
-  if (process.env.SANDBOX_SNAPSHOT_ID) {
-    config.source = { type: 'snapshot', snapshotId: process.env.SANDBOX_SNAPSHOT_ID };
+
+  const snapshotId = String(process.env.SANDBOX_SNAPSHOT_ID || '').trim();
+  if (snapshotId) {
+    try {
+      return await Sandbox.create({
+        ...baseConfig,
+        source: { type: 'snapshot', snapshotId }
+      });
+    } catch (error) {
+      console.warn('Kiz Memory snapshot unavailable; retrying with a clean Sandbox', error);
+    }
   }
-  return Sandbox.create(config);
+
+  return Sandbox.create(baseConfig);
 }
 
 async function ensureFfmpeg(sandbox) {
-  if (process.env.SANDBOX_SNAPSHOT_ID) return;
+  const detected = await detectFfmpeg(sandbox);
+  if (detected) return detected;
+
   const install = await sandbox.runCommand('bash', [
-    '-c',
-    'curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-7.0.2-amd64-static.tar.xz | tar -xJ --strip-components=1'
+    '-lc',
+    [
+      'set -e',
+      'if command -v apt-get >/dev/null 2>&1; then',
+      '  sudo apt-get update -qq',
+      '  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg',
+      'elif command -v dnf >/dev/null 2>&1; then',
+      '  sudo dnf install -y ffmpeg',
+      'else',
+      '  echo "Aucun gestionnaire de paquets compatible" >&2',
+      '  exit 77',
+      'fi'
+    ].join('\n')
   ]);
-  if (install.exitCode !== 0) throw new Error(`FFmpeg install failed: ${truncate(await install.stderr())}`);
+  if (install.exitCode !== 0) {
+    throw new Error(`FFmpeg system install failed: ${truncate(await install.stderr())}`);
+  }
+
+  const installed = await detectFfmpeg(sandbox);
+  if (!installed) throw new Error('FFmpeg install finished but ffmpeg/ffprobe are still unavailable.');
+  return installed;
 }
 
-async function probeRemoteAudio(sandbox, sourceUrl) {
-  const probe = await sandbox.runCommand('./ffprobe', [
+async function detectFfmpeg(sandbox) {
+  const check = await sandbox.runCommand('bash', [
+    '-lc',
+    [
+      'if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then',
+      '  printf "%s\\n%s\\n" "$(command -v ffmpeg)" "$(command -v ffprobe)"',
+      '  exit 0',
+      'fi',
+      'if [ -x ./ffmpeg ] && [ -x ./ffprobe ]; then',
+      '  printf "%s\\n%s\\n" "./ffmpeg" "./ffprobe"',
+      '  exit 0',
+      'fi',
+      'exit 1'
+    ].join('\n')
+  ]);
+  if (check.exitCode !== 0) return null;
+  const lines = (await check.stdout()).trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return null;
+  return { ffmpeg: lines[0], ffprobe: lines[1] };
+}
+
+async function probeRemoteAudio(sandbox, sourceUrl, ffprobe) {
+  const probe = await sandbox.runCommand(ffprobe, [
     '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index', '-of', 'csv=p=0', sourceUrl
   ]);
   return probe.exitCode === 0 && Boolean((await probe.stdout()).trim());
@@ -247,8 +297,9 @@ function truncate(value, limit = 1800) {
 
 function publicError(error) {
   const text = String(error?.message || error || '');
-  if (/snapshot/i.test(text)) return 'Le snapshot FFmpeg Vercel Sandbox est invalide ou expiré.';
-  if (/install/i.test(text)) return 'FFmpeg n’a pas pu être préparé dans le moteur vidéo.';
+  if (/snapshot/i.test(text)) return 'Le snapshot FFmpeg était indisponible ; Kiz Memory a essayé un Sandbox propre mais le démarrage a échoué.';
+  if (/install/i.test(text)) return 'FFmpeg n’a pas pu être installé dans le Sandbox Vercel.';
+  if (/sandbox|oidc|unauthor|forbidden/i.test(text)) return 'Vercel Sandbox n’a pas pu être créé pour le rendu.';
   if (/ffprobe/i.test(text)) return 'Le moteur n’a pas pu lire les pistes de la vidéo source.';
   if (/clip/i.test(text)) return 'FFmpeg n’a pas pu extraire un des passages sélectionnés.';
   if (/concat/i.test(text)) return 'FFmpeg n’a pas pu assembler les passages sélectionnés.';

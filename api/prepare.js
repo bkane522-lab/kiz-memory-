@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const sourceUrl = await signedReadUrl(sourcePath, 20 * 60 * 1000);
 
     sandbox = await createSandbox();
-    await ensureFfmpeg(sandbox);
+    const tools = await ensureFfmpeg(sandbox);
 
     const download = await sandbox.runCommand('curl', [
       '-sS', '-L', '--retry', '3', '--retry-all-errors', '--connect-timeout', '30',
@@ -38,8 +38,8 @@ export default async function handler(req, res) {
       throw new Error(`Video download failed (HTTP ${downloadStatus || 'network'}): ${truncate(await download.stderr())}`);
     }
 
-    const duration = await probeDuration(sandbox);
-    const hasAudio = await probeAudio(sandbox);
+    const duration = await probeDuration(sandbox, tools.ffprobe);
+    const hasAudio = await probeAudio(sandbox, tools.ffprobe);
 
     // V4.3 : UNE seule invocation FFmpeg traite la source.
     // - sortie 1 : proxy vidéo H.264 très léger pour mouvement + MediaPipe ;
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
       );
     }
 
-    const proxy = await sandbox.runCommand('./ffmpeg', args);
+    const proxy = await sandbox.runCommand(tools.ffmpeg, args);
     if (proxy.exitCode !== 0) throw new Error(`FFmpeg proxy failed: ${truncate(await proxy.stderr())}`);
 
     const stored = await storeSandboxFile(sandbox, 'analysis-proxy.mp4', proxyPath, 'video/mp4');
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
       audioTimeline,
       proxy: { width: 240, height: 426, fps: 4, codec: 'H.264' },
       expiresAt: Date.now() + readTtl,
-      version: '4.3'
+      version: '4.3.2'
     });
   } catch (error) {
     console.error('Kiz Memory prepare error', error);
@@ -121,29 +121,84 @@ async function resolveStoredSourcePath(requestedPath) {
 }
 
 async function createSandbox() {
-  const config = {
+  const baseConfig = {
     persistent: false,
     region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
-    resources: { vcpus: 4 }
+    // V4.3.2 : 2 vCPU suffisent pour le proxy et consomment moins du quota Hobby.
+    resources: { vcpus: 2 }
   };
-  if (process.env.SANDBOX_SNAPSHOT_ID) {
-    config.source = { type: 'snapshot', snapshotId: process.env.SANDBOX_SNAPSHOT_ID };
+
+  const snapshotId = String(process.env.SANDBOX_SNAPSHOT_ID || '').trim();
+  if (snapshotId) {
+    try {
+      return await Sandbox.create({
+        ...baseConfig,
+        source: { type: 'snapshot', snapshotId }
+      });
+    } catch (error) {
+      // Un ancien snapshot ne doit plus bloquer toute l'application.
+      console.warn('Kiz Memory snapshot unavailable; retrying with a clean Sandbox', error);
+    }
   }
-  return Sandbox.create(config);
+
+  return Sandbox.create(baseConfig);
 }
 
 async function ensureFfmpeg(sandbox) {
-  if (process.env.SANDBOX_SNAPSHOT_ID) return;
+  const detected = await detectFfmpeg(sandbox);
+  if (detected) return detected;
+
+  // SDK v3 utilise l'image universelle Ubuntu. On privilégie le paquet système
+  // plutôt qu'un téléchargement tiers d'archive FFmpeg à chaque démarrage.
   const install = await sandbox.runCommand('bash', [
-    '-c',
-    'curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-7.0.2-amd64-static.tar.xz | tar -xJ --strip-components=1'
+    '-lc',
+    [
+      'set -e',
+      'if command -v apt-get >/dev/null 2>&1; then',
+      '  sudo apt-get update -qq',
+      '  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg',
+      'elif command -v dnf >/dev/null 2>&1; then',
+      '  sudo dnf install -y ffmpeg',
+      'else',
+      '  echo "Aucun gestionnaire de paquets compatible" >&2',
+      '  exit 77',
+      'fi'
+    ].join('\n')
   ]);
-  if (install.exitCode !== 0) throw new Error(`FFmpeg install failed: ${truncate(await install.stderr())}`);
+
+  if (install.exitCode !== 0) {
+    throw new Error(`FFmpeg system install failed: ${truncate(await install.stderr())}`);
+  }
+
+  const installed = await detectFfmpeg(sandbox);
+  if (!installed) throw new Error('FFmpeg install finished but ffmpeg/ffprobe are still unavailable.');
+  return installed;
 }
 
-async function probeDuration(sandbox) {
-  const probe = await sandbox.runCommand('./ffprobe', [
+async function detectFfmpeg(sandbox) {
+  const check = await sandbox.runCommand('bash', [
+    '-lc',
+    [
+      'if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then',
+      '  printf "%s\\n%s\\n" "$(command -v ffmpeg)" "$(command -v ffprobe)"',
+      '  exit 0',
+      'fi',
+      'if [ -x ./ffmpeg ] && [ -x ./ffprobe ]; then',
+      '  printf "%s\\n%s\\n" "./ffmpeg" "./ffprobe"',
+      '  exit 0',
+      'fi',
+      'exit 1'
+    ].join('\n')
+  ]);
+  if (check.exitCode !== 0) return null;
+  const lines = (await check.stdout()).trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return null;
+  return { ffmpeg: lines[0], ffprobe: lines[1] };
+}
+
+async function probeDuration(sandbox, ffprobe) {
+  const probe = await sandbox.runCommand(ffprobe, [
     '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', 'input-video'
   ]);
   if (probe.exitCode !== 0) throw new Error('FFprobe duration failed.');
@@ -152,8 +207,8 @@ async function probeDuration(sandbox) {
   return Math.round(value * 1000) / 1000;
 }
 
-async function probeAudio(sandbox) {
-  const probe = await sandbox.runCommand('./ffprobe', [
+async function probeAudio(sandbox, ffprobe) {
+  const probe = await sandbox.runCommand(ffprobe, [
     '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index', '-of', 'csv=p=0', 'input-video'
   ]);
   return probe.exitCode === 0 && Boolean((await probe.stdout()).trim());
@@ -269,8 +324,9 @@ function truncate(value, limit = 1800) {
 
 function publicError(error) {
   const text = String(error?.message || error || '');
-  if (/snapshot/i.test(text)) return 'Le snapshot FFmpeg Vercel Sandbox est invalide ou expiré.';
-  if (/install/i.test(text)) return 'FFmpeg n’a pas pu être préparé dans le moteur vidéo.';
+  if (/snapshot/i.test(text)) return 'Le snapshot FFmpeg était indisponible ; Kiz Memory a essayé un Sandbox propre mais le démarrage a échoué.';
+  if (/install/i.test(text)) return 'FFmpeg n’a pas pu être installé dans le Sandbox Vercel.';
+  if (/sandbox|oidc|unauthor|forbidden/i.test(text)) return 'Vercel Sandbox n’a pas pu être créé pour ce traitement.';
   if (/Source blob not found/i.test(text)) return 'Le transfert est terminé, mais Vercel Blob ne retrouve pas encore le fichier stocké.';
   if (/download/i.test(text)) return 'Le moteur voit la vidéo privée, mais son téléchargement vers le moteur FFmpeg a échoué.';
   if (/proxy/i.test(text)) return 'La copie légère d’analyse n’a pas pu être créée.';

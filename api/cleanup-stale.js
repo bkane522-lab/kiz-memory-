@@ -1,7 +1,8 @@
 import { del, list } from '@vercel/blob';
 
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PREFIX = 'kiz-memory/';
+const TEMP_MAX_AGE_MS = 30 * 60 * 1000;
+const RESULT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
 export default async function handler(req, res) {
   const expected = process.env.CRON_SECRET;
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const cutoff = Date.now() - MAX_AGE_MS;
+    const now = Date.now();
     let cursor;
     let hasMore = true;
     let deleted = 0;
@@ -21,7 +22,11 @@ export default async function handler(req, res) {
     while (hasMore) {
       const page = await list({ prefix: PREFIX, limit: 500, cursor });
       const expired = page.blobs
-        .filter((blob) => new Date(blob.uploadedAt).getTime() < cutoff)
+        .filter((blob) => {
+          const age = now - new Date(blob.uploadedAt).getTime();
+          if (blob.pathname.startsWith('kiz-memory/result/')) return age > RESULT_MAX_AGE_MS;
+          return age > TEMP_MAX_AGE_MS;
+        })
         .map((blob) => blob.pathname);
 
       if (expired.length) {

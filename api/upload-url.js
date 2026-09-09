@@ -1,7 +1,9 @@
 import { issueSignedToken, presignUrl } from '@vercel/blob';
 import { randomUUID } from 'node:crypto';
 
-const MAX_BYTES = 1024 * 1024 * 1024; // 1 Go pour la V4.2.7
+const SOURCE_PREFIX = 'kiz-memory/source/';
+const MAX_BYTES = 900 * 1024 * 1024; // marge sous le quota Hobby de 1 Go
+const SIGNED_UPLOAD_TTL_MS = 6 * 60 * 60 * 1000;
 const ALLOWED_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
@@ -27,20 +29,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Fichier vidéo vide.' });
     }
     if (size > MAX_BYTES) {
-      return res.status(413).json({ error: 'Vidéo trop volumineuse pour cette V4.2 (1 Go maximum).' });
+      return res.status(413).json({ error: 'Vidéo trop volumineuse pour le mode gratuit (900 Mo maximum).' });
     }
     if (contentType && !ALLOWED_TYPES.has(contentType) && !contentType.startsWith('video/')) {
       return res.status(415).json({ error: 'Type de fichier non vidéo.' });
     }
 
+    const requestedPathname = String(body.pathname || '');
     const extension = safeExtension(filename, contentType);
-    const pathname = `kiz-memory/source/${Date.now()}-${randomUUID()}.${extension}`;
-    const validUntil = Date.now() + 2 * 60 * 60 * 1000;
+    const pathname = isAllowedResumePath(requestedPathname)
+      ? requestedPathname
+      : `${SOURCE_PREFIX}${Date.now()}-${randomUUID()}.${extension}`;
+    const validUntil = Date.now() + SIGNED_UPLOAD_TTL_MS;
 
+    // OIDC côté serveur : la délégation peut servir au PUT simple ou aux POST /mpu.
+    // Le client conserve uniquement le pathname/uploadId/key pour reprendre les
+    // parties déjà terminées ; une nouvelle URL signée peut être réémise pour le
+    // même pathname après un rechargement.
     const token = await issueSignedToken({
       pathname,
       operations: ['put'],
-      allowedContentTypes: ['video/*', 'application/octet-stream'],
       maximumSizeInBytes: MAX_BYTES,
       validUntil
     });
@@ -55,13 +63,27 @@ export default async function handler(req, res) {
       maximumSizeInBytes: MAX_BYTES
     });
 
-    return res.status(200).json({ pathname, presignedUrl, expiresAt: validUntil, version: '4.2.7' });
+    return res.status(200).json({
+      pathname,
+      presignedUrl,
+      expiresAt: validUntil,
+      maxBytes: MAX_BYTES,
+      version: '4.3'
+    });
   } catch (error) {
     console.error('upload-url error', error);
     return res.status(500).json({
-      error: 'Impossible de préparer le stockage privé. Vérifiez que Vercel Blob est connecté au projet.'
+      error: 'Impossible de préparer l’envoi privé OIDC.'
     });
   }
+}
+
+function isAllowedResumePath(pathname) {
+  return (
+    pathname.startsWith(SOURCE_PREFIX) &&
+    /^[a-zA-Z0-9_./-]+$/.test(pathname) &&
+    pathname.length < 240
+  );
 }
 
 function parseBody(body) {

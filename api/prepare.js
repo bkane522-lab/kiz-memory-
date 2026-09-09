@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 const SOURCE_PREFIX = 'kiz-memory/source/';
 const ANALYSIS_PREFIX = 'kiz-memory/analysis/';
-const SANDBOX_TIMEOUT_MS = 5 * 60 * 1000;
+const SANDBOX_TIMEOUT_MS = 285 * 1000; // sous la limite Hobby de 300 s
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,7 +14,6 @@ export default async function handler(req, res) {
 
   let sandbox;
   let proxyPath = '';
-  let audioPath = '';
 
   try {
     const body = parseBody(req.body);
@@ -24,17 +23,14 @@ export default async function handler(req, res) {
     }
 
     const sourcePath = await resolveStoredSourcePath(requestedSourcePath);
-
     proxyPath = `${ANALYSIS_PREFIX}${Date.now()}-${randomUUID()}-proxy.mp4`;
-    audioPath = `${ANALYSIS_PREFIX}${Date.now()}-${randomUUID()}-audio.wav`;
-
-    const sourceUrl = await signedReadUrl(sourcePath, 15 * 60 * 1000);
+    const sourceUrl = await signedReadUrl(sourcePath, 20 * 60 * 1000);
 
     sandbox = await createSandbox();
     await ensureFfmpeg(sandbox);
 
     const download = await sandbox.runCommand('curl', [
-      '-sS', '-L', '--retry', '2', '--connect-timeout', '30',
+      '-sS', '-L', '--retry', '3', '--retry-all-errors', '--connect-timeout', '30',
       '-w', '%{http_code}', '-o', 'input-video', sourceUrl
     ]);
     const downloadStatus = (await download.stdout()).trim();
@@ -45,65 +41,59 @@ export default async function handler(req, res) {
     const duration = await probeDuration(sandbox);
     const hasAudio = await probeAudio(sandbox);
 
-    const proxy = await sandbox.runCommand('./ffmpeg', [
+    // V4.3 : UNE seule invocation FFmpeg traite la source.
+    // - sortie 1 : proxy vidéo H.264 très léger pour mouvement + MediaPipe ;
+    // - sortie 2 (si audio) : aucune piste média, seulement des métadonnées RMS
+    //   toutes les 0,5 s dans un minuscule fichier texte.
+    // Il n'y a plus de WAV PCM ni de second transcodage audio.
+    const args = [
       '-hide_banner', '-loglevel', 'error', '-y',
       '-i', 'input-video',
       '-map', '0:v:0',
       '-an',
-      '-vf', 'scale=360:640:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=360:640:(ow-iw)/2:(oh-ih)/2:color=0x07030D,setsar=1,fps=8',
+      '-vf', 'scale=240:426:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=240:426:(ow-iw)/2:(oh-ih)/2:color=0x07030D,setsar=1,fps=4',
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
-      '-crf', '31',
+      '-crf', '35',
       '-pix_fmt', 'yuv420p',
       '-profile:v', 'baseline',
       '-level', '3.0',
       '-movflags', '+faststart',
+      '-max_muxing_queue_size', '1024',
       'analysis-proxy.mp4'
-    ]);
+    ];
+
+    if (hasAudio) {
+      args.push(
+        '-map', '0:a:0?',
+        '-vn',
+        '-af', 'aresample=16000,asetnsamples=n=8000:p=0,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=audio-levels.txt',
+        '-f', 'null', '-'
+      );
+    }
+
+    const proxy = await sandbox.runCommand('./ffmpeg', args);
     if (proxy.exitCode !== 0) throw new Error(`FFmpeg proxy failed: ${truncate(await proxy.stderr())}`);
 
-    let audio;
-    if (hasAudio) {
-      audio = await sandbox.runCommand('./ffmpeg', [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-i', 'input-video',
-        '-map', '0:a:0',
-        '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le',
-        'analysis-audio.wav'
-      ]);
-    } else {
-      audio = await sandbox.runCommand('./ffmpeg', [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
-        '-t', String(Math.max(1, duration)),
-        '-c:a', 'pcm_s16le',
-        'analysis-audio.wav'
-      ]);
-    }
-    if (audio.exitCode !== 0) throw new Error(`FFmpeg audio failed: ${truncate(await audio.stderr())}`);
-
-    await storeSandboxFile(sandbox, 'analysis-proxy.mp4', proxyPath, 'video/mp4');
-    await storeSandboxFile(sandbox, 'analysis-audio.wav', audioPath, 'audio/wav');
-
+    const stored = await storeSandboxFile(sandbox, 'analysis-proxy.mp4', proxyPath, 'video/mp4');
+    const audioTimeline = hasAudio ? await readAudioTimeline(sandbox, duration) : [];
     const readTtl = 2 * 60 * 60 * 1000;
-    const proxyUrl = await signedReadUrl(proxyPath, readTtl);
-    const audioUrl = await signedReadUrl(audioPath, readTtl);
+    const proxyUrl = await signedReadUrl(stored.pathname || proxyPath, readTtl);
 
     return res.status(200).json({
       sourcePath,
       proxyUrl,
-      proxyPath,
-      audioUrl,
-      audioPath,
+      proxyPath: stored.pathname || proxyPath,
       duration,
       hasAudio,
-      proxy: { width: 360, height: 640, fps: 8, codec: 'H.264' },
-      expiresAt: Date.now() + readTtl
+      audioTimeline,
+      proxy: { width: 240, height: 426, fps: 4, codec: 'H.264' },
+      expiresAt: Date.now() + readTtl,
+      version: '4.3'
     });
   } catch (error) {
     console.error('Kiz Memory prepare error', error);
-    const cleanup = [proxyPath, audioPath].filter(Boolean);
-    if (cleanup.length) await del(cleanup).catch(() => {});
+    if (proxyPath) await del(proxyPath).catch(() => {});
     return res.status(500).json({ error: publicError(error) });
   } finally {
     if (sandbox) await sandbox.stop().catch(() => {});
@@ -115,8 +105,6 @@ async function resolveStoredSourcePath(requestedPath) {
     await head(requestedPath, { access: 'private' });
     return requestedPath;
   } catch (exactError) {
-    // A presigned PUT can return a normalized pathname. If the client could not
-    // read that JSON response, recover conservatively from the unique prefix.
     const dot = requestedPath.lastIndexOf('.');
     const prefix = dot > 0 ? requestedPath.slice(0, dot) : requestedPath;
     try {
@@ -171,12 +159,73 @@ async function probeAudio(sandbox) {
   return probe.exitCode === 0 && Boolean((await probe.stdout()).trim());
 }
 
+async function readAudioTimeline(sandbox, duration) {
+  let buffer;
+  try {
+    buffer = await sandbox.readFileToBuffer({ path: 'audio-levels.txt' });
+  } catch {
+    return [];
+  }
+  if (!buffer?.length) return [];
+
+  const text = buffer.toString('utf8');
+  const raw = [];
+  let time = null;
+  for (const line of text.split(/\r?\n/)) {
+    const timeMatch = line.match(/pts_time:([0-9.+-]+)/);
+    if (timeMatch) {
+      const parsed = Number(timeMatch[1]);
+      time = Number.isFinite(parsed) ? parsed : null;
+      continue;
+    }
+    const rmsMatch = line.match(/lavfi\.astats\.Overall\.RMS_level=([-+0-9.eEinfINF]+)/);
+    if (!rmsMatch || time === null) continue;
+    const db = Number(rmsMatch[1]);
+    const amplitude = Number.isFinite(db) ? Math.pow(10, db / 20) : 0;
+    raw.push({ t: time, rms: amplitude });
+  }
+  if (!raw.length) return [];
+
+  const onset = raw.map((item, index) => Math.max(0, item.rms - (index ? raw[index - 1].rms : 0)));
+  const rmsNorm = robustNormalize(raw.map((item) => item.rms));
+  const onsetNorm = robustNormalize(onset);
+  return raw
+    .map((item, index) => ({
+      t: Math.round(item.t * 1000) / 1000,
+      value: round4(clamp01(0.72 * rmsNorm[index] + 0.28 * onsetNorm[index]))
+    }))
+    .filter((item) => item.t <= duration + 1);
+}
+
+function robustNormalize(values) {
+  if (!values.length) return [];
+  const sorted = [...values].map((value) => Number.isFinite(value) ? value : 0).sort((a, b) => a - b);
+  const low = percentile(sorted, 0.1);
+  const high = percentile(sorted, 0.9);
+  const span = high - low;
+  if (span < 1e-12) return values.map(() => 0.5);
+  return values.map((value) => clamp01(((Number(value) || 0) - low) / span));
+}
+
+function percentile(sorted, p) {
+  const index = (sorted.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower] || 0;
+  return sorted[lower] * (upper - index) + sorted[upper] * (index - lower);
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+function round4(value) {
+  return Math.round(value * 10000) / 10000;
+}
+
 async function storeSandboxFile(sandbox, filename, pathname, contentType) {
   const buffer = await sandbox.readFileToBuffer({ path: filename });
-  if (!buffer || buffer.length === 0) {
-    throw new Error(`Analysis store failed: ${filename} is missing or empty.`);
-  }
-
+  if (!buffer?.length) throw new Error(`Analysis store failed: ${filename} is missing or empty.`);
   try {
     const blob = await put(pathname, buffer, {
       access: 'private',
@@ -200,7 +249,6 @@ async function signedReadUrl(pathname, ttlMs) {
   });
   return presignedUrl;
 }
-
 
 function parseBody(body) {
   if (!body) return {};
@@ -226,7 +274,6 @@ function publicError(error) {
   if (/Source blob not found/i.test(text)) return 'Le transfert est terminé, mais Vercel Blob ne retrouve pas encore le fichier stocké.';
   if (/download/i.test(text)) return 'Le moteur voit la vidéo privée, mais son téléchargement vers le moteur FFmpeg a échoué.';
   if (/proxy/i.test(text)) return 'La copie légère d’analyse n’a pas pu être créée.';
-  if (/audio/i.test(text)) return 'La piste audio d’analyse n’a pas pu être créée.';
   if (/Analysis store failed/i.test(text)) return 'La copie légère a été créée, mais son enregistrement privé a échoué.';
   return 'La préparation de l’analyse vidéo a échoué.';
 }

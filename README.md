@@ -1,4 +1,4 @@
-# Kiz Memory V4.2.2
+# Kiz Memory V4.2.3
 
 **Promesse : Vidéo → Memory → Partager.**
 
@@ -39,7 +39,7 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - Les grosses vidéos 4K peuvent demander plusieurs minutes de traitement serveur.
 
 
-## Correctif V4.2.2
+## Correctif V4.2.3
 
 - corrige la lecture des blobs privés après le transfert ;
 - ajoute explicitement `access: 'private'` à toutes les URL signées Vercel Blob (`GET` et `PUT`) ;
@@ -47,7 +47,7 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - aucun score aléatoire ni timestamp prédéfini n'a été ajouté.
 
 
-## V4.2.2
+## V4.2.3
 - utilise le pathname réellement renvoyé par Vercel Blob après l'upload ;
 - vérifie le blob privé avant de lancer FFmpeg ;
 - récupère automatiquement un pathname normalisé si nécessaire ;

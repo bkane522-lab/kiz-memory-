@@ -1,4 +1,4 @@
-const APP_VERSION = "4.2.4";
+const APP_VERSION = "4.2.5";
 const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
 const CLIENT_UPLOAD_ROUTE = "/api/client-upload";
 const MEDIAPIPE_VERSION = "1.0.1";
@@ -89,7 +89,7 @@ async function handleFileSelection(event) {
 
   if (file.size > 1024 * 1024 * 1024) {
     input.value = "";
-    toast("Pour cette V4.2.4, la taille maximale est de 1 Go.");
+    toast("Pour cette V4.2.5, la taille maximale est de 1 Go.");
     return;
   }
 
@@ -423,24 +423,26 @@ async function createMemory() {
   const cleanupOnFailure = new Set();
 
   try {
-    $("#processingText").textContent = "Préparation du transfert privé.";
-    const ticket = await requestUploadUrl();
-    state.sourcePath = ticket.pathname;
-    cleanupOnFailure.add(ticket.pathname);
-
     $("#uploadProgressWrap").hidden = false;
     $("#processingText").textContent = "Transfert privé multipart — gardez Kiz Memory ouverte…";
     const sourceBlob = state.sourceBlob;
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
+    // V4.2.5 : l'upload multipart est la voie principale.
+    // On ne crée plus d'URL PUT signée avant de savoir si elle est nécessaire.
+    const preferredPath = buildSourcePath(state.sourceName);
     let uploaded;
     try {
-      uploaded = await uploadMultipart(ticket.pathname, sourceBlob, reportUploadProgress);
+      uploaded = await uploadMultipart(preferredPath, sourceBlob, reportUploadProgress);
     } catch (multipartError) {
       const moduleFailure = /module|import|fetch dynamically imported|failed to fetch/i.test(String(multipartError?.message || multipartError));
       if (!moduleFailure) throw multipartError;
+
       console.warn("Multipart client module unavailable; signed PUT fallback enabled", multipartError);
       $("#processingText").textContent = "Mode de transfert compatible — gardez Kiz Memory ouverte…";
+      const ticket = await requestUploadUrl();
+      state.sourcePath = ticket.pathname;
+      cleanupOnFailure.add(ticket.pathname);
       uploaded = await uploadWithProgress(sourceBlob, ticket.presignedUrl, reportUploadProgress);
     }
 
@@ -448,6 +450,10 @@ async function createMemory() {
       cleanupOnFailure.delete(state.sourcePath);
       state.sourcePath = uploaded.pathname;
       cleanupOnFailure.add(state.sourcePath);
+    } else if (!state.sourcePath) {
+      // Le SDK client doit normalement renvoyer le pathname final.
+      // Ne jamais continuer vers FFmpeg avec un chemin supposé.
+      throw new Error("Le transfert est terminé mais Vercel Blob n’a pas renvoyé le chemin du fichier.");
     }
 
     setStep("stepUploaded", true, "✓");
@@ -521,6 +527,12 @@ function setStep(id, done, marker) {
   item.classList.toggle("done", done);
   const span = item.querySelector("span");
   if (span) span.textContent = marker;
+}
+
+function buildSourcePath(originalName = "video.mp4") {
+  const ext = inferExtension(originalName, state.sourceMime || "video/mp4");
+  const uuid = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.round(performance.now() * 1000)}`;
+  return `kiz-memory/source/${Date.now()}-${uuid}.${ext}`;
 }
 
 function isSafeBlobPath(path) {
@@ -1292,8 +1304,10 @@ async function readJsonSafely(response) {
 }
 
 function friendlyProcessingError(error) {
-  const raw = String(error?.message || error || "");
-  if (/BLOB|stockage|token|presign/i.test(raw)) return "Le stockage vidéo privé n’est pas configuré sur Vercel. Consultez SETUP-VERCEL.md.";
+  const raw = String(error?.message || error || "").trim();
+  if (/not configured|non configur|BLOB_READ_WRITE_TOKEN|OIDC.*(missing|absent|invalid)|no blob store/i.test(raw)) {
+    return "Le stockage vidéo privé n’est pas accessible depuis ce déploiement Vercel.";
+  }
   if (/sandbox|snapshot|ffmpeg/i.test(raw)) return "Le moteur vidéo serveur n’a pas pu démarrer. Vérifiez la configuration Vercel Sandbox.";
   if (/timeout|temps|504/i.test(raw)) return "Le traitement a dépassé le temps disponible. Testez d’abord avec une vidéo plus courte.";
   if (/analyse|MediaPipe|copie/i.test(raw)) return raw;

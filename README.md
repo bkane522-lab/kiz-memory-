@@ -1,4 +1,4 @@
-# Kiz Memory V4.2.4
+# Kiz Memory V4.2.5
 
 **Promesse : Vidéo → Memory → Partager.**
 
@@ -56,7 +56,7 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - exécute le Sandbox en région `cdg1` près du Blob Paris.
 
 
-## V4.2.4 — vidéos longues / gros fichiers
+## V4.2.5 — vidéos longues / gros fichiers
 
 - upload navigateur → Blob en **multipart** via `@vercel/blob/client` ;
 - Vercel Blob découpe le fichier en parties, les transfère en parallèle et retente les parties qui échouent ;
@@ -67,4 +67,11 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - limite produit conservée à **1 Go** pour ne pas promettre un traitement FFmpeg fiable au-delà avant validation.
 
 ### Limite honnête
-Le Wake Lock est une demande au système, pas une garantie absolue. Android peut toujours suspendre/arrêter un navigateur (économie d’énergie, fermeture de l’application, manque de mémoire). Le multipart retente les parties pendant la session courante, mais cette V4.2.4 **ne reprend pas encore un upload après fermeture/rechargement complet de la page**.
+Le Wake Lock est une demande au système, pas une garantie absolue. Android peut toujours suspendre/arrêter un navigateur (économie d’énergie, fermeture de l’application, manque de mémoire). Le multipart retente les parties pendant la session courante, mais cette V4.2.5 **ne reprend pas encore un upload après fermeture/rechargement complet de la page**.
+
+
+## V4.2.5 — correction du préflight multipart
+- l'upload multipart direct est désormais tenté en premier ;
+- l'ancienne URL PUT signée n'est créée qu'en fallback si le module client multipart ne peut pas charger ;
+- les messages d'erreur Blob sont plus précis et n'annoncent plus à tort un stockage non configuré ;
+- les types vidéo autorisés côté jeton multipart sont explicites.

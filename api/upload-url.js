@@ -1,7 +1,7 @@
 import { issueSignedToken, presignUrl } from '@vercel/blob';
 import { randomUUID } from 'node:crypto';
 
-const MAX_BYTES = 1024 * 1024 * 1024; // 1 Go pour la V4.2
+const MAX_BYTES = 1024 * 1024 * 1024; // 1 Go pour la V4.2.4
 const ALLOWED_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
     const extension = safeExtension(filename, contentType);
     const pathname = `kiz-memory/source/${Date.now()}-${randomUUID()}.${extension}`;
-    const validUntil = Date.now() + 20 * 60 * 1000;
+    const validUntil = Date.now() + 2 * 60 * 60 * 1000;
 
     const token = await issueSignedToken({
       pathname,
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
       maximumSizeInBytes: MAX_BYTES
     });
 
-    return res.status(200).json({ pathname, presignedUrl, expiresAt: validUntil, version: '4.2.3' });
+    return res.status(200).json({ pathname, presignedUrl, expiresAt: validUntil, version: '4.2.4' });
   } catch (error) {
     console.error('upload-url error', error);
     return res.status(500).json({

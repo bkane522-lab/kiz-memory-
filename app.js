@@ -1,4 +1,6 @@
-const APP_VERSION = "4.2.3";
+const APP_VERSION = "4.2.4";
+const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
+const CLIENT_UPLOAD_ROUTE = "/api/client-upload";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
@@ -27,6 +29,10 @@ const state = {
   analysisMode: "",
   segments: []
 };
+
+let wakeLock = null;
+let wakeLockWanted = false;
+let blobClientModulePromise = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -83,7 +89,7 @@ async function handleFileSelection(event) {
 
   if (file.size > 1024 * 1024 * 1024) {
     input.value = "";
-    toast("Pour cette V4.2, la taille maximale est de 1 Go.");
+    toast("Pour cette V4.2.4, la taille maximale est de 1 Go.");
     return;
   }
 
@@ -262,12 +268,157 @@ function stopRecTimer() {
   recTime.textContent = "00:00";
 }
 
+async function setWakeLockWanted(enabled) {
+  wakeLockWanted = Boolean(enabled);
+  if (!wakeLockWanted) {
+    if (wakeLock) {
+      try { await wakeLock.release(); } catch {}
+      wakeLock = null;
+    }
+    updateWakeStatus(false);
+    return;
+  }
+  await acquireWakeLock();
+}
+
+async function acquireWakeLock() {
+  if (!wakeLockWanted) return false;
+  if (!("wakeLock" in navigator) || !navigator.wakeLock?.request) {
+    updateWakeStatus(false, "Gardez l’écran allumé et Kiz Memory au premier plan pendant le traitement.");
+    return false;
+  }
+  if (document.visibilityState !== "visible") return false;
+  if (wakeLock) return true;
+
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+      if (wakeLockWanted) updateWakeStatus(false, "Le téléphone a libéré le maintien d’écran. Revenez sur Kiz Memory si nécessaire.");
+    }, { once: true });
+    updateWakeStatus(true, "Écran maintenu actif pendant l’envoi et l’analyse.");
+    return true;
+  } catch (error) {
+    console.warn("Wake Lock unavailable", error);
+    updateWakeStatus(false, "Gardez l’écran allumé et Kiz Memory au premier plan pendant le traitement.");
+    return false;
+  }
+}
+
+function updateWakeStatus(active, message = "") {
+  const el = $("#wakeStatus");
+  if (!el) return;
+  el.textContent = message || (active ? "Écran maintenu actif." : "");
+  el.classList.toggle("active", Boolean(active));
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (wakeLockWanted && document.visibilityState === "visible" && !wakeLock) {
+    acquireWakeLock().catch(() => {});
+  }
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (!state.processing) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+async function getBlobClientUpload() {
+  if (!blobClientModulePromise) {
+    blobClientModulePromise = import(BLOB_CLIENT_MODULE_URL).then((module) => {
+      if (typeof module.upload !== "function") throw new Error("Module Vercel Blob client incomplet.");
+      return module.upload;
+    });
+  }
+  return blobClientModulePromise;
+}
+
+function createUploadProgressReporter(totalBytes) {
+  const startedAt = performance.now();
+  let lastAt = startedAt;
+  let lastLoaded = 0;
+  let smoothedSpeed = 0;
+
+  return ({ loaded = 0, total = totalBytes, percentage } = {}) => {
+    const safeTotal = Number.isFinite(total) && total > 0 ? total : totalBytes;
+    const safeLoaded = Math.max(0, Math.min(safeTotal || loaded, Number(loaded) || 0));
+    const now = performance.now();
+    const elapsedSinceLast = (now - lastAt) / 1000;
+
+    if (elapsedSinceLast >= 0.35 && safeLoaded >= lastLoaded) {
+      const instantSpeed = (safeLoaded - lastLoaded) / elapsedSinceLast;
+      if (Number.isFinite(instantSpeed) && instantSpeed > 0) {
+        smoothedSpeed = smoothedSpeed ? (smoothedSpeed * 0.7 + instantSpeed * 0.3) : instantSpeed;
+      }
+      lastAt = now;
+      lastLoaded = safeLoaded;
+    }
+
+    const computedPercent = Number.isFinite(percentage)
+      ? percentage
+      : safeTotal > 0 ? (safeLoaded / safeTotal) * 100 : 0;
+    const safePercent = Math.max(0, Math.min(100, Math.round(computedPercent)));
+
+    $("#uploadProgressBar").style.width = `${safePercent}%`;
+    $("#uploadProgressText").textContent = `${safePercent} %`;
+
+    const details = [];
+    if (safeTotal > 0) details.push(`${formatBytes(safeLoaded)} / ${formatBytes(safeTotal)}`);
+    if (smoothedSpeed > 0) details.push(`${formatBytes(smoothedSpeed)}/s`);
+    const remainingSeconds = smoothedSpeed > 0 && safeTotal > safeLoaded
+      ? (safeTotal - safeLoaded) / smoothedSpeed
+      : 0;
+    if (remainingSeconds >= 3) details.push(`env. ${formatShortDuration(remainingSeconds)} restantes`);
+    const detailEl = $("#uploadProgressDetails");
+    if (detailEl) detailEl.textContent = details.join(" · ");
+  };
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${Math.round(value)} o`;
+  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} Ko`;
+  if (value < 1024 ** 3) return `${(value / (1024 ** 2)).toFixed(value < 100 * 1024 ** 2 ? 1 : 0)} Mo`;
+  return `${(value / (1024 ** 3)).toFixed(2)} Go`;
+}
+
+function formatShortDuration(seconds) {
+  const rounded = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remMinutes = minutes % 60;
+    return `${hours} h ${remMinutes} min`;
+  }
+  if (minutes > 0) return `${minutes} min ${secs.toString().padStart(2, "0")} s`;
+  return `${secs} s`;
+}
+
+async function uploadMultipart(pathname, blob, onProgress) {
+  const upload = await getBlobClientUpload();
+  return upload(pathname, blob, {
+    access: "private",
+    handleUploadUrl: CLIENT_UPLOAD_ROUTE,
+    multipart: true,
+    contentType: state.sourceMime || blob.type || "application/octet-stream",
+    clientPayload: JSON.stringify({
+      version: APP_VERSION,
+      filename: state.sourceName,
+      size: blob.size
+    }),
+    onUploadProgress: (event) => onProgress(event)
+  });
+}
+
 async function createMemory() {
   if (!state.sourceBlob || state.processing) return;
   state.processing = true;
   go("processing");
   resetProcessingUi();
   setStep("stepReceived", true, "✓");
+  await setWakeLockWanted(true);
 
   const cleanupOnFailure = new Set();
 
@@ -278,12 +429,21 @@ async function createMemory() {
     cleanupOnFailure.add(ticket.pathname);
 
     $("#uploadProgressWrap").hidden = false;
-    $("#processingText").textContent = "Transfert privé de votre vidéo…";
-    const uploaded = await uploadWithProgress(state.sourceBlob, ticket.presignedUrl, (percent) => {
-      const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
-      $("#uploadProgressBar").style.width = `${safePercent}%`;
-      $("#uploadProgressText").textContent = `${safePercent} %`;
-    });
+    $("#processingText").textContent = "Transfert privé multipart — gardez Kiz Memory ouverte…";
+    const sourceBlob = state.sourceBlob;
+    const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
+
+    let uploaded;
+    try {
+      uploaded = await uploadMultipart(ticket.pathname, sourceBlob, reportUploadProgress);
+    } catch (multipartError) {
+      const moduleFailure = /module|import|fetch dynamically imported|failed to fetch/i.test(String(multipartError?.message || multipartError));
+      if (!moduleFailure) throw multipartError;
+      console.warn("Multipart client module unavailable; signed PUT fallback enabled", multipartError);
+      $("#processingText").textContent = "Mode de transfert compatible — gardez Kiz Memory ouverte…";
+      uploaded = await uploadWithProgress(sourceBlob, ticket.presignedUrl, reportUploadProgress);
+    }
+
     if (uploaded?.pathname && isSafeBlobPath(uploaded.pathname)) {
       cleanupOnFailure.delete(state.sourcePath);
       state.sourcePath = uploaded.pathname;
@@ -337,6 +497,7 @@ async function createMemory() {
     toast(friendlyProcessingError(error), 6200);
   } finally {
     state.processing = false;
+    await setWakeLockWanted(false);
   }
 }
 
@@ -346,6 +507,9 @@ function resetProcessingUi() {
   $("#uploadProgressWrap").hidden = true;
   $("#uploadProgressBar").style.width = "0%";
   $("#uploadProgressText").textContent = "0 %";
+  const uploadDetails = $("#uploadProgressDetails");
+  if (uploadDetails) uploadDetails.textContent = "";
+  updateWakeStatus(false);
   $("#analysisProgressWrap").hidden = true;
   $("#analysisProgressBar").style.width = "0%";
   $("#analysisProgressText").textContent = "0 / 0 images analysées";
@@ -383,13 +547,15 @@ function uploadWithProgress(blob, url, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url, true);
-    xhr.timeout = 30 * 60 * 1000;
+    xhr.timeout = 2 * 60 * 60 * 1000;
     xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable && event.total > 0) onProgress((event.loaded / event.total) * 100);
+      if (event.lengthComputable && event.total > 0) {
+        onProgress({ loaded: event.loaded, total: event.total, percentage: (event.loaded / event.total) * 100 });
+      }
     });
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        onProgress(100);
+        onProgress({ loaded: blob.size, total: blob.size, percentage: 100 });
         let metadata = null;
         try {
           metadata = xhr.responseText ? JSON.parse(xhr.responseText) : null;

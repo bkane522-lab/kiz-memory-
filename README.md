@@ -1,4 +1,4 @@
-# Kiz Memory V4.2.3
+# Kiz Memory V4.2.4
 
 **Promesse : Vidéo → Memory → Partager.**
 
@@ -28,7 +28,8 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - `app.js` : sélection, MediaPipe, mouvement, audio, partage.
 - `api/prepare.js` : création du proxy et du WAV.
 - `api/render.js` : découpe/concat FFmpeg.
-- `api/upload-url.js` : upload privé signé.
+- `api/upload-url.js` : ticket/fallback d’upload privé signé.
+- `api/client-upload.js` : upload direct multipart Vercel Blob pour les grosses vidéos.
 - `api/cleanup*.js` : confidentialité et nettoyage.
 - `SETUP-VERCEL.md` : configuration.
 
@@ -53,3 +54,17 @@ Le modèle est chargé depuis les ressources Google/MediaPipe. L'inférence Pose
 - récupère automatiquement un pathname normalisé si nécessaire ;
 - force `addRandomSuffix: false` pour les uploads signés ;
 - exécute le Sandbox en région `cdg1` près du Blob Paris.
+
+
+## V4.2.4 — vidéos longues / gros fichiers
+
+- upload navigateur → Blob en **multipart** via `@vercel/blob/client` ;
+- Vercel Blob découpe le fichier en parties, les transfère en parallèle et retente les parties qui échouent ;
+- progression réelle avec octets transférés, débit approximatif et temps restant estimé ;
+- demande **Screen Wake Lock** pendant tout le pipeline pour limiter les interruptions dues à la mise en veille ;
+- ré-acquisition automatique du Wake Lock quand l’onglet redevient visible ;
+- fallback vers l’ancien PUT signé uniquement si le module client Blob ne peut pas être chargé ;
+- limite produit conservée à **1 Go** pour ne pas promettre un traitement FFmpeg fiable au-delà avant validation.
+
+### Limite honnête
+Le Wake Lock est une demande au système, pas une garantie absolue. Android peut toujours suspendre/arrêter un navigateur (économie d’énergie, fermeture de l’application, manque de mémoire). Le multipart retente les parties pendant la session courante, mais cette V4.2.4 **ne reprend pas encore un upload après fermeture/rechargement complet de la page**.

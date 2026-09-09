@@ -442,3 +442,22 @@ button:focus-visible { outline: 3px solid rgba(255, 216, 107, 0.85); outline-off
   line-height: 1.45;
   min-height: 18px;
 }
+
+
+/* V4.2.4 — gros fichiers, progression détaillée et maintien d’écran */
+.upload-progress-details {
+  grid-column: 1 / -1;
+  min-height: 18px;
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.wake-status {
+  min-height: 18px;
+  margin: 8px auto 0 !important;
+  color: #f1d6a6 !important;
+  font-size: 11px;
+  text-align: center;
+}
+.wake-status.active { color: #cfe8d6 !important; }

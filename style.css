@@ -444,7 +444,7 @@ button:focus-visible { outline: 3px solid rgba(255, 216, 107, 0.85); outline-off
 }
 
 
-/* V4.2.4 — gros fichiers, progression détaillée et maintien d’écran */
+/* V4.3 — vidéos longues, progression détaillée et maintien d’écran */
 .upload-progress-details {
   grid-column: 1 / -1;
   min-height: 18px;

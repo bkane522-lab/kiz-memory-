@@ -8,7 +8,7 @@
   <title>Kiz Memory</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.png" />
-  <link rel="stylesheet" href="style.css?v=4.2.7" />
+  <link rel="stylesheet" href="style.css?v=4.3" />
 </head>
 <body>
   <main class="app" id="app">
@@ -17,7 +17,7 @@
         <img class="brand-mark" src="assets/logo-mark.png" alt="" />
         <h1 id="homeTitle">Kiz Memory</h1>
         <p class="promise">Transformez votre danse en souvenir.</p>
-        <span class="version-badge" aria-label="Version 4.2.7">V4.2.7</span>
+        <span class="version-badge" aria-label="Version 4.3">V4.3</span>
       </div>
 
       <div class="home-actions" aria-label="Créer une Memory">
@@ -138,8 +138,8 @@
       <button class="restart-button" id="restartBtn">RECOMMENCER</button>
 
       <aside class="foundation-note" role="note">
-        <strong>V4.2.7 — OIDC gratuit, sans token permanent</strong>
-        <p>Le transfert utilise le multipart avec reprises automatiques des parties en échec. Kiz Memory demande aussi au téléphone de garder l’écran actif pendant l’envoi et l’analyse, puis conserve la sélection automatique réelle par mouvement, musique et pose humaine quand MediaPipe est disponible.</p>
+        <strong>V4.3 — Vidéos longues</strong>
+        <p>Le transfert est découpé en parties et mémorise les parties terminées. Si le navigateur est interrompu, sélectionnez à nouveau la même vidéo pour reprendre l’envoi. Le moteur crée ensuite une seule copie légère d’analyse et ne rend que les passages retenus.</p>
       </aside>
     </section>
   </main>
@@ -147,6 +147,6 @@
   <video id="analysisVideo" playsinline muted preload="auto" hidden></video>
   <canvas id="analysisCanvas" width="90" height="160" hidden></canvas>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=4.2.7"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
 </html>

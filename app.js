@@ -1,5 +1,4 @@
-const APP_VERSION = "4.2.7";
-const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
+const APP_VERSION = "4.3";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
@@ -11,7 +10,6 @@ const state = {
   sourceMime: "",
   sourcePath: "",
   proxyPath: "",
-  audioPath: "",
   resultUrl: "",
   resultPath: "",
   resultBlob: null,
@@ -31,7 +29,6 @@ const state = {
 
 let wakeLock = null;
 let wakeLockWanted = false;
-let blobClientModulePromise = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -86,9 +83,9 @@ async function handleFileSelection(event) {
     return;
   }
 
-  if (file.size > 1024 * 1024 * 1024) {
+  if (file.size > 900 * 1024 * 1024) {
     input.value = "";
-    toast("Pour cette V4.2.7, la taille maximale est de 1 Go.");
+    toast("Pour rester dans la limite gratuite, cette version accepte jusqu’à 900 Mo par vidéo.");
     return;
   }
 
@@ -112,7 +109,6 @@ function setSource(blob, name, mimeType = "") {
   state.sourceMime = mimeType || blob.type || "";
   state.sourcePath = "";
   state.proxyPath = "";
-  state.audioPath = "";
   state.resultBlob = null;
   state.analysisMode = "";
   state.segments = [];
@@ -396,12 +392,18 @@ async function createMemory() {
   const cleanupOnFailure = new Set();
 
   try {
+    const sourceBlob = state.sourceBlob;
+    $("#processingText").textContent = "Libération de l’espace temporaire…";
+    const storage = await requestStorageMaintenance(sourceBlob.size);
+    if (!storage?.enoughSpace) {
+      throw new Error(`Espace Blob gratuit insuffisant (${formatBytes(storage?.usedBytes || 0)} utilisés).`);
+    }
+
     $("#uploadProgressWrap").hidden = false;
     $("#processingText").textContent = "Transfert privé sécurisé — gardez Kiz Memory ouverte…";
-    const sourceBlob = state.sourceBlob;
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
-    // V4.2.7 : upload direct vers Blob privé avec URL PUT signée générée côté serveur via OIDC.
+    // V4.3 : upload multipart reprenable via URL signée OIDC, sans service payant.
     // Aucun BLOB_READ_WRITE_TOKEN permanent n'est requis.
     const ticket = await requestUploadUrl();
     state.sourcePath = ticket.pathname;
@@ -420,9 +422,7 @@ async function createMemory() {
       cleanupOnFailure.add(state.sourcePath);
     }
     state.proxyPath = prepared.proxyPath;
-    state.audioPath = prepared.audioPath;
     cleanupOnFailure.add(prepared.proxyPath);
-    cleanupOnFailure.add(prepared.audioPath);
     setStep("stepPrepared", true, "✓");
 
     $("#processingText").textContent = "Analyse du mouvement, des corps et de la musique…";
@@ -440,7 +440,6 @@ async function createMemory() {
     state.resultName = rendered.filename || buildResultFilename(state.sourceName);
     state.sourcePath = "";
     state.proxyPath = "";
-    state.audioPath = "";
     cleanupOnFailure.clear();
 
     $("#processingText").textContent = "Memory prête.";
@@ -491,49 +490,283 @@ function isSafeBlobPath(path) {
   return typeof path === "string" && path.startsWith("kiz-memory/") && /^[a-zA-Z0-9_./-]+$/.test(path) && path.length < 300;
 }
 
+async function requestStorageMaintenance(requiredBytes) {
+  const response = await fetch("/api/storage-maintenance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requiredBytes: Number(requiredBytes) || 0 })
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) throw new Error(data?.error || "Le nettoyage du stockage temporaire a échoué.");
+  return data;
+}
+
+const UPLOAD_SESSION_KEY = "kiz-memory-upload-v4.3";
+const UPLOAD_PART_SIZE = 8 * 1024 * 1024;
+const UPLOAD_CONCURRENCY = 3;
+const UPLOAD_MAX_RETRIES = 4;
+
+function uploadFingerprint(blob) {
+  return [state.sourceName || "video", blob?.size || 0, state.sourceMime || blob?.type || "", Number(blob?.lastModified || 0)].join("|");
+}
+
+function readUploadSession(blob) {
+  try {
+    const raw = localStorage.getItem(UPLOAD_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (!session || session.fingerprint !== uploadFingerprint(blob)) return null;
+    if (!isSafeBlobPath(session.pathname) || !session.uploadId || !session.key) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function writeUploadSession(session) {
+  try {
+    localStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify({ ...session, updatedAt: Date.now() }));
+  } catch (error) {
+    console.warn("Upload session persistence unavailable", error);
+  }
+}
+
+function clearUploadSession() {
+  try { localStorage.removeItem(UPLOAD_SESSION_KEY); } catch {}
+}
+
 async function requestUploadUrl() {
+  const blob = state.sourceBlob;
+  const session = blob ? readUploadSession(blob) : null;
   const response = await fetch("/api/upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       filename: state.sourceName,
       contentType: state.sourceMime || "video/mp4",
-      size: state.sourceBlob?.size || 0
+      size: blob?.size || 0,
+      pathname: session?.pathname || undefined
     })
   });
   const data = await readJsonSafely(response);
   if (!response.ok) throw new Error(data?.error || "Impossible de préparer le stockage privé.");
   if (!data?.presignedUrl || !data?.pathname) throw new Error("Configuration du stockage incomplète.");
+  return { ...data, resumeSession: session };
+}
+
+function multipartUrlFromPresigned(url) {
+  const parsed = new URL(url);
+  parsed.pathname = parsed.pathname.replace(/\/$/, "") + "/mpu";
+  return parsed.toString();
+}
+
+function parseStoreIdFromPresignedUrl(presignedUrl) {
+  try {
+    const url = new URL(presignedUrl);
+    const delegation = url.searchParams.get("vercel-blob-delegation");
+    if (!delegation) return "";
+    const payloadSegment = delegation.split(".")[0] || "";
+    let base64 = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) base64 += "=";
+    const payload = JSON.parse(atob(base64));
+    return String(payload?.storeId || "").replace(/^store_/, "");
+  } catch (error) {
+    console.warn("Unable to read Blob store id from signed delegation", error);
+    return "";
+  }
+}
+
+function multipartHeaders(contentType, presignedUrl) {
+  const storeId = parseStoreIdFromPresignedUrl(presignedUrl);
+  if (!storeId) throw new Error("La délégation Blob signée ne contient pas l’identifiant du stockage.");
+  return {
+    "x-api-version": "12",
+    "x-vercel-blob-store-id": storeId,
+    "x-api-blob-request-id": `${storeId}:${Date.now()}:${globalThis.crypto?.randomUUID?.() || Math.round(performance.now() * 1000)}`,
+    "x-api-blob-request-attempt": "0",
+    "x-vercel-blob-access": "private",
+    "x-content-type": contentType || "application/octet-stream",
+    "x-add-random-suffix": "0",
+    "x-allow-overwrite": "0"
+  };
+}
+
+async function parseUploadResponse(response) {
+  const raw = await response.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch {}
+  if (!response.ok) {
+    const error = new Error(data?.error?.message || data?.error || data?.message || `Vercel Blob HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return data || {};
+}
+
+async function createMultipartUpload(url, contentType) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { ...multipartHeaders(contentType, url), "x-mpu-action": "create" }
+  });
+  const data = await parseUploadResponse(response);
+  if (!data.uploadId || !data.key) throw new Error("Vercel Blob n’a pas créé la session multipart.");
   return data;
 }
 
-function uploadWithProgress(blob, url, onProgress) {
+function uploadPartXhr(url, chunk, headers, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.timeout = 2 * 60 * 60 * 1000;
+    xhr.open("POST", url, true);
+    xhr.timeout = 20 * 60 * 1000;
+    Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
     xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress({ loaded: event.loaded, total: event.total, percentage: (event.loaded / event.total) * 100 });
-      }
+      if (event.lengthComputable) onProgress?.(event.loaded);
     });
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        onProgress({ loaded: blob.size, total: blob.size, percentage: 100 });
-        let metadata = null;
-        try {
-          metadata = xhr.responseText ? JSON.parse(xhr.responseText) : null;
-        } catch {
-          metadata = null;
-        }
-        resolve(metadata);
-      } else reject(new Error(`Échec du transfert privé (${xhr.status}).`));
+        let data = null;
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch {}
+        const etag = data?.etag || xhr.getResponseHeader("etag");
+        if (!etag) return reject(new Error("Vercel Blob n’a pas renvoyé l’ETag de la partie."));
+        resolve({ etag, partNumber: Number(headers["x-mpu-part-number"]) });
+        return;
+      }
+      const error = new Error(`Partie refusée par Vercel Blob (${xhr.status}).`);
+      error.status = xhr.status;
+      reject(error);
     });
-    xhr.addEventListener("error", () => reject(new Error("Le transfert privé a échoué.")));
-    xhr.addEventListener("timeout", () => reject(new Error("Le transfert a pris trop de temps.")));
-    xhr.addEventListener("abort", () => reject(new Error("Le transfert a été interrompu.")));
-    xhr.send(blob);
+    xhr.addEventListener("error", () => reject(new Error("Réseau interrompu pendant l’envoi d’une partie.")));
+    xhr.addEventListener("timeout", () => reject(new Error("Une partie a dépassé le temps d’envoi autorisé.")));
+    xhr.addEventListener("abort", () => reject(new Error("Envoi interrompu.")));
+    xhr.send(chunk);
   });
+}
+
+async function uploadPartWithRetry(args) {
+  let lastError;
+  for (let attempt = 1; attempt <= UPLOAD_MAX_RETRIES; attempt++) {
+    try {
+      return await uploadPartXhr(
+        args.url,
+        args.chunk,
+        { ...args.headers, "x-api-blob-request-attempt": String(attempt - 1) },
+        args.onProgress
+      );
+    } catch (error) {
+      lastError = error;
+      if ([400, 404, 409].includes(Number(error?.status))) throw error;
+      if (attempt < UPLOAD_MAX_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 700 * (2 ** (attempt - 1))));
+      }
+    }
+  }
+  throw lastError || new Error("Échec de l’envoi multipart.");
+}
+
+async function completeMultipartUpload(url, session, parts, contentType) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...multipartHeaders(contentType, url),
+      "content-type": "application/json",
+      "x-mpu-action": "complete",
+      "x-mpu-upload-id": session.uploadId,
+      "x-mpu-key": encodeURIComponent(session.key)
+    },
+    body: JSON.stringify(parts.sort((a, b) => a.partNumber - b.partNumber))
+  });
+  return parseUploadResponse(response);
+}
+
+async function uploadWithProgress(blob, presignedUrl, onProgress) {
+  const mpuUrl = multipartUrlFromPresigned(presignedUrl);
+  const contentType = state.sourceMime || blob.type || "application/octet-stream";
+  let session = readUploadSession(blob);
+
+  if (!session || session.pathname !== state.sourcePath) {
+    const created = await createMultipartUpload(mpuUrl, contentType);
+    session = {
+      fingerprint: uploadFingerprint(blob),
+      pathname: state.sourcePath,
+      uploadId: created.uploadId,
+      key: created.key,
+      partSize: UPLOAD_PART_SIZE,
+      parts: [],
+      createdAt: Date.now()
+    };
+    writeUploadSession(session);
+  }
+
+  const partCount = Math.ceil(blob.size / UPLOAD_PART_SIZE);
+  const completed = new Map(
+    (Array.isArray(session.parts) ? session.parts : [])
+      .filter((part) => Number.isInteger(part?.partNumber) && part.partNumber >= 1 && part.partNumber <= partCount && part.etag)
+      .map((part) => [part.partNumber, { etag: part.etag, partNumber: part.partNumber }])
+  );
+  const inFlight = new Map();
+
+  const partBytes = (partNumber) => {
+    const start = (partNumber - 1) * UPLOAD_PART_SIZE;
+    return Math.max(0, Math.min(UPLOAD_PART_SIZE, blob.size - start));
+  };
+  const completedBytes = () => [...completed.keys()].reduce((sum, partNumber) => sum + partBytes(partNumber), 0);
+  const report = () => {
+    const loaded = Math.min(blob.size, completedBytes() + [...inFlight.values()].reduce((sum, value) => sum + value, 0));
+    onProgress?.({ loaded, total: blob.size, percentage: blob.size ? (loaded / blob.size) * 100 : 0 });
+  };
+  report();
+
+  const queue = [];
+  for (let partNumber = 1; partNumber <= partCount; partNumber++) {
+    if (!completed.has(partNumber)) queue.push(partNumber);
+  }
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < queue.length) {
+      const partNumber = queue[cursor++];
+      const start = (partNumber - 1) * UPLOAD_PART_SIZE;
+      const end = Math.min(blob.size, start + UPLOAD_PART_SIZE);
+      const chunk = blob.slice(start, end, "application/octet-stream");
+      const headers = {
+        ...multipartHeaders(contentType, mpuUrl),
+        "x-mpu-action": "upload",
+        "x-mpu-key": encodeURIComponent(session.key),
+        "x-mpu-upload-id": session.uploadId,
+        "x-mpu-part-number": String(partNumber),
+        "x-content-length": String(chunk.size)
+      };
+      const part = await uploadPartWithRetry({
+        url: mpuUrl,
+        chunk,
+        headers,
+        onProgress: (loaded) => {
+          inFlight.set(partNumber, Math.min(chunk.size, loaded));
+          report();
+        }
+      });
+      inFlight.delete(partNumber);
+      completed.set(partNumber, part);
+      session.parts = [...completed.values()].sort((a, b) => a.partNumber - b.partNumber);
+      writeUploadSession(session);
+      report();
+    }
+  }
+
+  try {
+    await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, Math.max(1, queue.length)) }, () => worker()));
+    const result = await completeMultipartUpload(mpuUrl, session, [...completed.values()], contentType);
+    clearUploadSession();
+    onProgress?.({ loaded: blob.size, total: blob.size, percentage: 100 });
+    return result;
+  } catch (error) {
+    if ([400, 404, 409].includes(Number(error?.status))) {
+      clearUploadSession();
+      throw new Error("La session d’envoi a expiré. Sélectionnez à nouveau la même vidéo pour repartir proprement.");
+    }
+    writeUploadSession(session);
+    throw new Error("Envoi interrompu. Rouvrez Kiz Memory puis sélectionnez à nouveau la même vidéo : les parties déjà envoyées seront reprises.");
+  }
 }
 
 async function requestPreparation() {
@@ -544,23 +777,18 @@ async function requestPreparation() {
   });
   const data = await readJsonSafely(response);
   if (!response.ok) throw new Error(data?.error || "Impossible de préparer l’analyse vidéo.");
-  if (!data?.proxyUrl || !data?.audioUrl || !data?.proxyPath || !data?.audioPath) {
-    throw new Error("Le moteur n’a pas renvoyé les fichiers d’analyse.");
+  if (!data?.proxyUrl || !data?.proxyPath) {
+    throw new Error("Le moteur n’a pas renvoyé la copie légère d’analyse.");
   }
   return data;
 }
 
 async function analyzePreparedVideo(prepared) {
   releaseAnalysisObjectUrls();
-  const [proxyResponse, audioResponse] = await Promise.all([
-    fetch(prepared.proxyUrl, { cache: "no-store" }),
-    fetch(prepared.audioUrl, { cache: "no-store" })
-  ]);
+  const proxyResponse = await fetch(prepared.proxyUrl, { cache: "no-store" });
   if (!proxyResponse.ok) throw new Error("La copie vidéo d’analyse n’a pas pu être récupérée.");
-  if (!audioResponse.ok) throw new Error("La piste audio d’analyse n’a pas pu être récupérée.");
 
   const proxyBlob = await proxyResponse.blob();
-  const audioBlob = await audioResponse.blob();
   const proxyObjectUrl = URL.createObjectURL(proxyBlob);
   state.analysisObjectUrls.push(proxyObjectUrl);
 
@@ -571,10 +799,9 @@ async function analyzePreparedVideo(prepared) {
   const duration = finiteDuration(analysisVideo.duration, prepared.duration);
   if (!Number.isFinite(duration) || duration < 2) throw new Error("La durée de la vidéo d’analyse est invalide.");
 
-  const audioTimeline = await analyzeAudioBlob(audioBlob, duration).catch((error) => {
-    console.warn("Audio analysis unavailable", error);
-    return [];
-  });
+  const audioTimeline = Array.isArray(prepared.audioTimeline)
+    ? prepared.audioTimeline.filter((item) => Number.isFinite(Number(item?.t)) && Number.isFinite(Number(item?.value)))
+    : [];
 
   const poseEngine = await createPoseEngine().catch((error) => {
     console.warn("MediaPipe pose unavailable; measurable fallback enabled", error);
@@ -651,7 +878,11 @@ async function analyzePreparedVideo(prepared) {
 
   const aiFrames = samples.filter((sample) => sample.posePresence > 0).length;
   const aiCoverage = samples.length ? aiFrames / samples.length : 0;
-  const mode = poseEngine && aiCoverage >= 0.2 ? "pose+motion+audio" : "motion+audio";
+  const poseAvailable = Boolean(poseEngine && aiCoverage >= 0.2);
+  const audioAvailable = Boolean(prepared.hasAudio && audioTimeline.length);
+  const mode = poseAvailable
+    ? (audioAvailable ? "pose+motion+audio" : "pose+motion")
+    : (audioAvailable ? "motion+audio" : "motion");
   const scored = scoreSamples(samples, mode);
   const segments = selectSegments(scored, duration);
   if (segments.length < 1) throw new Error("Aucun passage exploitable n’a pu être sélectionné.");
@@ -801,41 +1032,6 @@ function meanAbsDiff(current, previous) {
   return sum / length;
 }
 
-async function analyzeAudioBlob(blob, duration) {
-  const arrayBuffer = await blob.arrayBuffer();
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return [];
-  const context = new AudioContextClass();
-  try {
-    const decoded = await context.decodeAudioData(arrayBuffer.slice(0));
-    const channel = decoded.getChannelData(0);
-    const sampleRate = decoded.sampleRate;
-    const windowSeconds = 0.5;
-    const windowSize = Math.max(256, Math.floor(sampleRate * windowSeconds));
-    const timeline = [];
-    let previousRms = 0;
-
-    for (let start = 0; start < channel.length; start += windowSize) {
-      const end = Math.min(channel.length, start + windowSize);
-      let sumSq = 0;
-      for (let i = start; i < end; i++) sumSq += channel[i] * channel[i];
-      const rms = Math.sqrt(sumSq / Math.max(1, end - start));
-      const onset = Math.max(0, rms - previousRms);
-      previousRms = rms;
-      timeline.push({ t: start / sampleRate, rms, onset });
-    }
-
-    const rmsNorm = robustNormalize(timeline.map((item) => item.rms));
-    const onsetNorm = robustNormalize(timeline.map((item) => item.onset));
-    return timeline.map((item, index) => ({
-      t: item.t,
-      value: clamp01(0.72 * rmsNorm[index] + 0.28 * onsetNorm[index])
-    })).filter((item) => item.t <= duration + 1);
-  } finally {
-    context.close?.().catch?.(() => {});
-  }
-}
-
 function audioAt(timeline, time) {
   if (!timeline?.length) return 0;
   const approxIndex = Math.max(0, Math.min(timeline.length - 1, Math.round(time / 0.5)));
@@ -865,10 +1061,12 @@ function scoreSamples(samples, mode) {
   const rawMotion = samples.map((_, index) => Math.max(frameDiff[index], poseMotion[index]));
   const variation = rawMotion.map((value, index) => index ? Math.abs(value - rawMotion[index - 1]) : 0);
   const variationNorm = robustNormalize(variation);
+  const hasPose = mode.startsWith("pose+");
+  const hasAudio = mode.endsWith("+audio");
 
   const scored = samples.map((sample, index) => {
     let score;
-    if (mode === "pose+motion+audio") {
+    if (hasPose && hasAudio) {
       const bodyQuality = clamp01(0.55 * framing[index] + 0.45 * presence[index]);
       score =
         0.30 * rawMotion[index] +
@@ -876,11 +1074,20 @@ function scoreSamples(samples, mode) {
         0.20 * audio[index] +
         0.23 * bodyQuality +
         0.10 * variationNorm[index];
-    } else {
+    } else if (hasPose) {
+      const bodyQuality = clamp01(0.55 * framing[index] + 0.45 * presence[index]);
+      score =
+        0.38 * rawMotion[index] +
+        0.22 * rotation[index] +
+        0.28 * bodyQuality +
+        0.12 * variationNorm[index];
+    } else if (hasAudio) {
       score =
         0.52 * frameDiff[index] +
         0.30 * audio[index] +
         0.18 * variationNorm[index];
+    } else {
+      score = 0.72 * frameDiff[index] + 0.28 * variationNorm[index];
     }
     return { ...sample, score: clamp01(score) };
   });
@@ -890,7 +1097,6 @@ function scoreSamples(samples, mode) {
     return { ...sample, smoothScore: average(neighbors.map((item) => item.score)) };
   });
 }
-
 function selectSegments(samples, duration) {
   const plan = memoryPlan(duration);
   if (!samples.length) return deterministicFallbackSegments(duration, plan.count, plan.clipDuration);
@@ -977,7 +1183,6 @@ async function requestRender(analysis) {
       sourcePath: state.sourcePath,
       sourceName: state.sourceName,
       proxyPath: state.proxyPath,
-      audioPath: state.audioPath,
       analysisMode: analysis.mode,
       segments: analysis.segments
     })
@@ -1002,9 +1207,13 @@ function showServerResult(rendered, analysis) {
   $("#previewStatus").className = "preview-status ok";
   $("#previewStatus").textContent = "Memory découpée automatiquement et prête à être lue.";
 
-  const modeLabel = analysis.mode === "pose+motion+audio"
-    ? "IA de pose + mouvement + musique"
-    : "mouvement + musique";
+  const modeLabels = {
+    "pose+motion+audio": "IA de pose + mouvement + musique",
+    "pose+motion": "IA de pose + mouvement",
+    "motion+audio": "mouvement + musique",
+    "motion": "mouvement"
+  };
+  const modeLabel = modeLabels[analysis.mode] || "analyse mesurable";
   const seconds = analysis.segments.reduce((sum, segment) => sum + (segment.end - segment.start), 0);
   $("#selectionSummary").textContent = `${analysis.segments.length} passages · ${Math.round(seconds)} s · ${modeLabel}`;
 
@@ -1083,7 +1292,7 @@ async function resetAndRestart() {
   resultVideo.removeAttribute("src");
   resultVideo.load();
 
-  const paths = [state.resultPath, state.sourcePath, state.proxyPath, state.audioPath].filter(Boolean);
+  const paths = [state.resultPath, state.sourcePath, state.proxyPath].filter(Boolean);
   for (const path of paths) cleanupPath(path).catch(() => {});
 
   Object.assign(state, {
@@ -1092,7 +1301,6 @@ async function resetAndRestart() {
     sourceMime: "",
     sourcePath: "",
     proxyPath: "",
-    audioPath: "",
     resultUrl: "",
     resultPath: "",
     resultBlob: null,
@@ -1267,6 +1475,7 @@ function friendlyProcessingError(error) {
   if (/not configured|non configur|BLOB_READ_WRITE_TOKEN|OIDC.*(missing|absent|invalid)|no blob store/i.test(raw)) {
     return "Le stockage vidéo privé n’est pas accessible depuis ce déploiement Vercel.";
   }
+  if (/quota|espace Blob|storage.*(limit|insuff)|capacity|exceed/i.test(raw)) return "Le stockage gratuit est plein. Kiz Memory a nettoyé les anciens fichiers temporaires, mais il reste trop peu d’espace pour cette vidéo.";
   if (/sandbox|snapshot|ffmpeg/i.test(raw)) return "Le moteur vidéo serveur n’a pas pu démarrer. Vérifiez la configuration Vercel Sandbox.";
   if (/timeout|temps|504/i.test(raw)) return "Le traitement a dépassé le temps disponible. Testez d’abord avec une vidéo plus courte.";
   if (/analyse|MediaPipe|copie/i.test(raw)) return raw;

@@ -1,4 +1,4 @@
-import { del, issueSignedToken, presignUrl } from '@vercel/blob';
+import { del, issueSignedToken, presignUrl, put } from '@vercel/blob';
 import { Sandbox } from '@vercel/sandbox';
 import { randomUUID } from 'node:crypto';
 
@@ -43,7 +43,6 @@ export default async function handler(req, res) {
 
     resultPath = `${RESULT_PREFIX}${Date.now()}-${randomUUID()}.mp4`;
     const sourceUrl = await signedReadUrl(sourcePath, 15 * 60 * 1000);
-    const resultPutUrl = await signedWriteUrl(resultPath, 15 * 60 * 1000, 'video/mp4');
 
     sandbox = await createSandbox();
     await ensureFfmpeg(sandbox);
@@ -61,10 +60,7 @@ export default async function handler(req, res) {
     const outputBytes = Number((await stat.stdout()).trim()) || 0;
     if (outputBytes <= 0) throw new Error('La Memory MP4 finale est vide.');
 
-    const upload = await sandbox.runCommand('curl', [
-      '-fsS', '--retry', '2', '-X', 'PUT', '-H', 'Content-Type: video/mp4', '--upload-file', 'output.mp4', resultPutUrl
-    ]);
-    if (upload.exitCode !== 0) throw new Error(`Result upload failed: ${truncate(await upload.stderr())}`);
+    await storeSandboxResult(sandbox, 'output.mp4', resultPath, 'video/mp4');
 
     await safeDelete([sourcePath, proxyPath, audioPath]);
     sourcePath = '';
@@ -171,6 +167,7 @@ function validateSegments(value) {
 async function createSandbox() {
   const config = {
     persistent: false,
+    region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
     resources: { vcpus: 4 }
   };
@@ -203,16 +200,25 @@ async function signedReadUrl(pathname, ttlMs) {
   return presignedUrl;
 }
 
-async function signedWriteUrl(pathname, ttlMs, contentType) {
-  const validUntil = Date.now() + ttlMs;
-  const token = await issueSignedToken({
-    pathname,
-    operations: ['put'],
-    allowedContentTypes: [contentType],
-    validUntil
-  });
-  const { presignedUrl } = await presignUrl(token, { pathname, operation: 'put', access: 'private', validUntil });
-  return presignedUrl;
+async function storeSandboxResult(sandbox, filename, pathname, contentType) {
+  const buffer = await sandbox.readFileToBuffer({ path: filename });
+  if (!buffer || buffer.length === 0) {
+    throw new Error('Result store failed: output file is missing or empty.');
+  }
+
+  try {
+    const blob = await put(pathname, buffer, {
+      access: 'private',
+      contentType,
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      multipart: buffer.length > 100 * 1024 * 1024
+    });
+    if (!blob?.pathname) throw new Error('Blob SDK returned no pathname.');
+    return blob;
+  } catch (error) {
+    throw new Error(`Result store failed (${buffer.length} bytes): ${truncate(error?.message || error)}`);
+  }
 }
 
 async function safeDelete(paths) {
@@ -253,6 +259,6 @@ function publicError(error) {
   if (/install/i.test(text)) return 'FFmpeg n’a pas pu être préparé dans le moteur vidéo.';
   if (/download/i.test(text)) return 'Le moteur n’a pas pu récupérer la vidéo privée.';
   if (/render/i.test(text)) return 'FFmpeg n’a pas pu découper et assembler les passages sélectionnés.';
-  if (/upload/i.test(text)) return 'La Memory finale n’a pas pu être stockée.';
+  if (/Result store failed/i.test(text)) return 'La Memory a été créée, mais son enregistrement privé a échoué.';
   return 'La création de la Memory finale a échoué.';
 }

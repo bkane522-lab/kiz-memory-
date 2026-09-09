@@ -1,4 +1,4 @@
-import { del, head, issueSignedToken, list, presignUrl } from '@vercel/blob';
+import { del, head, issueSignedToken, list, presignUrl, put } from '@vercel/blob';
 import { Sandbox } from '@vercel/sandbox';
 import { randomUUID } from 'node:crypto';
 
@@ -29,8 +29,6 @@ export default async function handler(req, res) {
     audioPath = `${ANALYSIS_PREFIX}${Date.now()}-${randomUUID()}-audio.wav`;
 
     const sourceUrl = await signedReadUrl(sourcePath, 15 * 60 * 1000);
-    const proxyPutUrl = await signedWriteUrl(proxyPath, 15 * 60 * 1000, 'video/mp4');
-    const audioPutUrl = await signedWriteUrl(audioPath, 15 * 60 * 1000, 'audio/wav');
 
     sandbox = await createSandbox();
     await ensureFfmpeg(sandbox);
@@ -84,8 +82,8 @@ export default async function handler(req, res) {
     }
     if (audio.exitCode !== 0) throw new Error(`FFmpeg audio failed: ${truncate(await audio.stderr())}`);
 
-    await uploadFile(sandbox, 'analysis-proxy.mp4', proxyPutUrl, 'video/mp4');
-    await uploadFile(sandbox, 'analysis-audio.wav', audioPutUrl, 'audio/wav');
+    await storeSandboxFile(sandbox, 'analysis-proxy.mp4', proxyPath, 'video/mp4');
+    await storeSandboxFile(sandbox, 'analysis-audio.wav', audioPath, 'audio/wav');
 
     const readTtl = 2 * 60 * 60 * 1000;
     const proxyUrl = await signedReadUrl(proxyPath, readTtl);
@@ -173,11 +171,25 @@ async function probeAudio(sandbox) {
   return probe.exitCode === 0 && Boolean((await probe.stdout()).trim());
 }
 
-async function uploadFile(sandbox, filename, url, contentType) {
-  const upload = await sandbox.runCommand('curl', [
-    '-fsS', '--retry', '2', '-X', 'PUT', '-H', `Content-Type: ${contentType}`, '--upload-file', filename, url
-  ]);
-  if (upload.exitCode !== 0) throw new Error(`Analysis upload failed: ${truncate(await upload.stderr())}`);
+async function storeSandboxFile(sandbox, filename, pathname, contentType) {
+  const buffer = await sandbox.readFileToBuffer({ path: filename });
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Analysis store failed: ${filename} is missing or empty.`);
+  }
+
+  try {
+    const blob = await put(pathname, buffer, {
+      access: 'private',
+      contentType,
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      multipart: buffer.length > 100 * 1024 * 1024
+    });
+    if (!blob?.pathname) throw new Error('Blob SDK returned no pathname.');
+    return blob;
+  } catch (error) {
+    throw new Error(`Analysis store failed (${filename}, ${buffer.length} bytes): ${truncate(error?.message || error)}`);
+  }
 }
 
 async function signedReadUrl(pathname, ttlMs) {
@@ -189,17 +201,6 @@ async function signedReadUrl(pathname, ttlMs) {
   return presignedUrl;
 }
 
-async function signedWriteUrl(pathname, ttlMs, contentType) {
-  const validUntil = Date.now() + ttlMs;
-  const token = await issueSignedToken({
-    pathname,
-    operations: ['put'],
-    allowedContentTypes: [contentType],
-    validUntil
-  });
-  const { presignedUrl } = await presignUrl(token, { pathname, operation: 'put', access: 'private', validUntil });
-  return presignedUrl;
-}
 
 function parseBody(body) {
   if (!body) return {};
@@ -226,6 +227,6 @@ function publicError(error) {
   if (/download/i.test(text)) return 'Le moteur voit la vidéo privée, mais son téléchargement vers le moteur FFmpeg a échoué.';
   if (/proxy/i.test(text)) return 'La copie légère d’analyse n’a pas pu être créée.';
   if (/audio/i.test(text)) return 'La piste audio d’analyse n’a pas pu être créée.';
-  if (/upload/i.test(text)) return 'Les fichiers temporaires d’analyse n’ont pas pu être stockés.';
+  if (/Analysis store failed/i.test(text)) return 'La copie légère a été créée, mais son enregistrement privé a échoué.';
   return 'La préparation de l’analyse vidéo a échoué.';
 }

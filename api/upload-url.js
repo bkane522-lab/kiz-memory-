@@ -55,7 +55,7 @@ export default async function handler(req, res) {
       maximumSizeInBytes: MAX_BYTES
     });
 
-    return res.status(200).json({ pathname, presignedUrl, expiresAt: validUntil, version: '4.2.2' });
+    return res.status(200).json({ pathname, presignedUrl, expiresAt: validUntil, version: '4.2.3' });
   } catch (error) {
     console.error('upload-url error', error);
     return res.status(500).json({

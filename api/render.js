@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 const SOURCE_PREFIX = 'kiz-memory/source/';
 const ANALYSIS_PREFIX = 'kiz-memory/analysis/';
 const RESULT_PREFIX = 'kiz-memory/result/';
-const SANDBOX_TIMEOUT_MS = 285 * 1000; // sous la limite Hobby de 300 s
+const SANDBOX_TIMEOUT_MS = 285 * 1000;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   let sandbox;
   let sourcePath = '';
   let proxyPath = '';
-  let resultPath = '';
+  const resultPaths = [];
 
   try {
     const body = parseBody(req.body);
@@ -26,31 +26,19 @@ export default async function handler(req, res) {
     const analysisMode = String(body.analysisMode || 'motion+audio');
     const segments = validateSegments(body.segments);
 
-    if (!isAllowedPath(sourcePath, SOURCE_PREFIX)) {
-      return res.status(400).json({ error: 'Chemin vidéo invalide.' });
-    }
-    if (proxyPath && !isAllowedPath(proxyPath, ANALYSIS_PREFIX)) {
-      return res.status(400).json({ error: 'Chemin proxy invalide.' });
-    }
-    if (!segments.length) {
-      return res.status(400).json({ error: 'Aucun passage à assembler.' });
-    }
+    if (!isAllowedPath(sourcePath, SOURCE_PREFIX)) return res.status(400).json({ error: 'Chemin vidéo invalide.' });
+    if (proxyPath && !isAllowedPath(proxyPath, ANALYSIS_PREFIX)) return res.status(400).json({ error: 'Chemin proxy invalide.' });
+    if (!segments.length) return res.status(400).json({ error: 'Aucun passage à découper.' });
 
-    resultPath = `${RESULT_PREFIX}${Date.now()}-${randomUUID()}.mp4`;
     const sourceUrl = await signedReadUrl(sourcePath, 30 * 60 * 1000);
-
     sandbox = await createSandbox();
     const tools = await ensureFfmpeg(sandbox);
-
-    // V4.3: aucun téléchargement intégral de la source. On demande directement
-    // à FFmpeg les 2 à 6 petites fenêtres retenues. -ss avant -i permet un seek
-    // côté entrée et évite de décoder toute la vidéo depuis zéro pour chaque clip.
     const hasAudio = await probeRemoteAudio(sandbox, sourceUrl, tools.ffprobe);
-    const clipNames = [];
+
+    const renderedClips = [];
     for (let index = 0; index < segments.length; index++) {
       const segment = segments[index];
-      const clipName = `clip-${String(index).padStart(2, '0')}.mp4`;
-      clipNames.push(clipName);
+      const clipName = `memory-${String(index + 1).padStart(2, '0')}.mp4`;
       const clipDuration = Math.max(0.5, segment.end - segment.start);
       const args = [
         '-hide_banner', '-loglevel', 'error', '-y',
@@ -77,56 +65,59 @@ export default async function handler(req, res) {
       if (renderClip.exitCode !== 0) {
         throw new Error(`FFmpeg clip ${index + 1} failed: ${truncate(await renderClip.stderr())}`);
       }
+      const stat = await sandbox.runCommand('stat', ['-c', '%s', clipName]);
+      if (stat.exitCode !== 0) throw new Error(`Memory ${index + 1} absente après rendu.`);
+      const outputBytes = Number((await stat.stdout()).trim()) || 0;
+      if (outputBytes <= 0) throw new Error(`Memory ${index + 1} vide après rendu.`);
+      renderedClips.push({ clipName, outputBytes, segment, index });
     }
 
-    const concatBody = clipNames.map((name) => `file '${name}'`).join('\n') + '\n';
-    const writeList = await sandbox.runCommand('bash', ['-c', `cat > concat.txt <<'KIZEOF'\n${concatBody}KIZEOF`]);
-    if (writeList.exitCode !== 0) throw new Error('Impossible de préparer la liste des passages.');
-
-    const concat = await sandbox.runCommand(tools.ffmpeg, [
-      '-hide_banner', '-loglevel', 'error', '-y',
-      '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
-      '-c', 'copy', '-movflags', '+faststart', 'output.mp4'
-    ]);
-    if (concat.exitCode !== 0) throw new Error(`FFmpeg concat failed: ${truncate(await concat.stderr())}`);
-
-    const stat = await sandbox.runCommand('stat', ['-c', '%s', 'output.mp4']);
-    if (stat.exitCode !== 0) throw new Error('La Memory MP4 finale n’a pas été créée.');
-    const outputBytes = Number((await stat.stdout()).trim()) || 0;
-    if (outputBytes <= 0) throw new Error('La Memory MP4 finale est vide.');
-
-    // Libérer les fichiers d'entrée privés avant d'écrire le résultat conserve
-    // une marge sous le quota Blob Hobby.
+    // Les fichiers source/proxy ne sont plus nécessaires. Les supprimer avant
+    // d'enregistrer les clips garde de la marge sur le quota Blob Hobby.
     await safeDelete([sourcePath, proxyPath]);
     sourcePath = '';
     proxyPath = '';
 
-    await storeSandboxResult(sandbox, 'output.mp4', resultPath, 'video/mp4');
-
     const resultTtl = 2 * 60 * 60 * 1000;
-    const resultUrl = await signedReadUrl(resultPath, resultTtl);
-    const selectedSeconds = segments.reduce((sum, segment) => sum + (segment.end - segment.start), 0);
+    const memories = [];
+    for (const clip of renderedClips) {
+      const resultPath = `${RESULT_PREFIX}${Date.now()}-${randomUUID()}-memory-${String(clip.index + 1).padStart(2, '0')}.mp4`;
+      resultPaths.push(resultPath);
+      await storeSandboxResult(sandbox, clip.clipName, resultPath, 'video/mp4');
+      const resultUrl = await signedReadUrl(resultPath, resultTtl);
+      memories.push({
+        resultUrl,
+        resultPath,
+        filename: buildOutputFilename(sourceName, clip.index + 1),
+        outputBytes: clip.outputBytes,
+        duration: Math.round((clip.segment.end - clip.segment.start) * 10) / 10,
+        start: clip.segment.start,
+        end: clip.segment.end,
+        index: clip.index + 1
+      });
+    }
+
+    const outputBytes = memories.reduce((sum, memory) => sum + memory.outputBytes, 0);
+    const selectedSeconds = memories.reduce((sum, memory) => sum + memory.duration, 0);
 
     return res.status(200).json({
-      resultUrl,
-      resultPath,
-      filename: buildOutputFilename(sourceName),
+      memories,
       outputBytes,
       format: 'video/mp4',
       videoCodec: 'H.264',
       audioCodec: hasAudio ? 'AAC' : null,
       width: 1080,
       height: 1920,
-      clipCount: segments.length,
+      clipCount: memories.length,
       selectedSeconds: Math.round(selectedSeconds * 10) / 10,
       analysisMode,
-      renderStrategy: 'selected-segments-only',
+      renderStrategy: 'separate-selected-clips',
       expiresAt: Date.now() + resultTtl,
-      version: '4.3.2'
+      version: '4.4'
     });
   } catch (error) {
     console.error('Kiz Memory render error', error);
-    await safeDelete([sourcePath, proxyPath, resultPath]);
+    await safeDelete([sourcePath, proxyPath, ...resultPaths]);
     return res.status(500).json({ error: publicError(error) });
   } finally {
     if (sandbox) await sandbox.stop().catch(() => {});
@@ -135,7 +126,7 @@ export default async function handler(req, res) {
 
 function validateSegments(value) {
   if (!Array.isArray(value)) return [];
-  const clean = value.slice(0, 6).map((segment) => ({
+  const clean = value.slice(0, 5).map((segment) => ({
     start: Number(segment?.start),
     end: Number(segment?.end)
   })).filter((segment) =>
@@ -143,8 +134,8 @@ function validateSegments(value) {
     Number.isFinite(segment.end) &&
     segment.start >= 0 &&
     segment.end > segment.start &&
-    segment.end - segment.start >= 1 &&
-    segment.end - segment.start <= 15 &&
+    segment.end - segment.start >= 2 &&
+    segment.end - segment.start <= 32 &&
     segment.end <= 6 * 60 * 60
   );
   clean.sort((a, b) => a.start - b.start);
@@ -164,26 +155,20 @@ async function createSandbox() {
     timeout: SANDBOX_TIMEOUT_MS,
     resources: { vcpus: 2 }
   };
-
   const snapshotId = String(process.env.SANDBOX_SNAPSHOT_ID || '').trim();
   if (snapshotId) {
     try {
-      return await Sandbox.create({
-        ...baseConfig,
-        source: { type: 'snapshot', snapshotId }
-      });
+      return await Sandbox.create({ ...baseConfig, source: { type: 'snapshot', snapshotId } });
     } catch (error) {
       console.warn('Kiz Memory snapshot unavailable; retrying with a clean Sandbox', error);
     }
   }
-
   return Sandbox.create(baseConfig);
 }
 
 async function ensureFfmpeg(sandbox) {
   const detected = await detectFfmpeg(sandbox);
   if (detected) return detected;
-
   const install = await sandbox.runCommand('bash', [
     '-lc',
     [
@@ -199,10 +184,7 @@ async function ensureFfmpeg(sandbox) {
       'fi'
     ].join('\n')
   ]);
-  if (install.exitCode !== 0) {
-    throw new Error(`FFmpeg system install failed: ${truncate(await install.stderr())}`);
-  }
-
+  if (install.exitCode !== 0) throw new Error(`FFmpeg system install failed: ${truncate(await install.stderr())}`);
   const installed = await detectFfmpeg(sandbox);
   if (!installed) throw new Error('FFmpeg install finished but ffmpeg/ffprobe are still unavailable.');
   return installed;
@@ -281,13 +263,13 @@ function isAllowedPath(path, prefix) {
   return path.startsWith(prefix) && /^[a-zA-Z0-9_./-]+$/.test(path) && path.length < 240;
 }
 
-function buildOutputFilename(name) {
+function buildOutputFilename(name, index) {
   const base = String(name || 'kiz-memory')
     .replace(/\.[^.]+$/, '')
     .replace(/[^a-z0-9-_]+/gi, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 50) || 'kiz-memory';
-  return `${base}-memory.mp4`;
+    .slice(0, 42) || 'kiz-memory';
+  return `${base}-memory-${String(index).padStart(2, '0')}.mp4`;
 }
 
 function truncate(value, limit = 1800) {
@@ -301,8 +283,7 @@ function publicError(error) {
   if (/install/i.test(text)) return 'FFmpeg n’a pas pu être installé dans le Sandbox Vercel.';
   if (/sandbox|oidc|unauthor|forbidden/i.test(text)) return 'Vercel Sandbox n’a pas pu être créé pour le rendu.';
   if (/ffprobe/i.test(text)) return 'Le moteur n’a pas pu lire les pistes de la vidéo source.';
-  if (/clip/i.test(text)) return 'FFmpeg n’a pas pu extraire un des passages sélectionnés.';
-  if (/concat/i.test(text)) return 'FFmpeg n’a pas pu assembler les passages sélectionnés.';
-  if (/Result store failed/i.test(text)) return 'La Memory a été créée, mais son enregistrement privé a échoué.';
-  return 'La création de la Memory finale a échoué.';
+  if (/clip|Memory .*rendu/i.test(text)) return 'FFmpeg n’a pas pu extraire une des Memories sélectionnées.';
+  if (/Result store failed/i.test(text)) return 'Les clips ont été créés, mais leur enregistrement privé a échoué.';
+  return 'La création des Memories séparées a échoué.';
 }

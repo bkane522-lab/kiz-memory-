@@ -89,7 +89,7 @@ export default async function handler(req, res) {
       audioTimeline,
       proxy: { width: 240, height: 426, fps: 4, codec: 'H.264' },
       expiresAt: Date.now() + readTtl,
-      version: '4.3.2'
+      version: '4.4'
     });
   } catch (error) {
     console.error('Kiz Memory prepare error', error);
@@ -125,7 +125,7 @@ async function createSandbox() {
     persistent: false,
     region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
-    // V4.3.2 : 2 vCPU suffisent pour le proxy et consomment moins du quota Hobby.
+    // V4.4 : 2 vCPU suffisent pour le proxy et limitent la consommation du quota Hobby.
     resources: { vcpus: 2 }
   };
 

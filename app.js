@@ -1,4 +1,4 @@
-const APP_VERSION = "4.3.1";
+const APP_VERSION = "4.3.2";
 const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -410,7 +410,7 @@ async function createMemory() {
     $("#processingText").textContent = "Transfert privé sécurisé — gardez Kiz Memory ouverte…";
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
-    // V4.3.1 : SDK officiel Vercel Blob + multipart presigné OIDC.
+    // V4.3.2 : SDK officiel Vercel Blob + multipart presigné OIDC.
     // Le SDK découpe le fichier, envoie les parties en parallèle et réessaie les parties réseau en échec.
     const uploaded = await uploadSourceWithProgress(sourceBlob, reportUploadProgress);
     if (!uploaded?.pathname || !isSafeBlobPath(uploaded.pathname)) {
@@ -1254,7 +1254,8 @@ function friendlyProcessingError(error) {
     return "Le stockage vidéo privé n’est pas accessible depuis ce déploiement Vercel.";
   }
   if (/quota|espace Blob|storage.*(limit|insuff)|capacity|exceed/i.test(raw)) return "Le stockage gratuit est plein. Kiz Memory a nettoyé les anciens fichiers temporaires, mais il reste trop peu d’espace pour cette vidéo.";
-  if (/sandbox|snapshot|ffmpeg/i.test(raw)) return "Le moteur vidéo serveur n’a pas pu démarrer. Vérifiez la configuration Vercel Sandbox.";
+  if (/FFmpeg n’a pas pu être installé|snapshot FFmpeg|Vercel Sandbox n’a pas pu être créé/i.test(raw)) return raw;
+  if (/sandbox|snapshot|ffmpeg/i.test(raw)) return "Le moteur vidéo serveur n’a pas pu démarrer. Le détail a été enregistré dans les logs Vercel.";
   if (/timeout|temps|504/i.test(raw)) return "Le traitement a dépassé le temps disponible. Testez d’abord avec une vidéo plus courte.";
   if (/analyse|MediaPipe|copie/i.test(raw)) return raw;
   return raw || "La création de la Memory a échoué.";

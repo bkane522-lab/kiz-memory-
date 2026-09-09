@@ -1,6 +1,6 @@
 {
   "name": "kiz-memory",
-  "version": "4.3.1",
+  "version": "4.3.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@vercel/blob": "2.8.0",
-    "@vercel/sandbox": "3.2.1"
+    "@vercel/sandbox": "3.2.2"
   }
 }

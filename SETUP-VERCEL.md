@@ -1,4 +1,4 @@
-# Installation Vercel — Kiz Memory V4.3.1
+# Installation Vercel — Kiz Memory V4.3.2
 
 ## Prérequis déjà en place
 
@@ -9,9 +9,9 @@
 
 ## Déploiement
 
-1. Remplacer les fichiers du projet par le contenu du ZIP V4.3.1.
+1. Remplacer les fichiers du projet par le contenu du ZIP V4.3.2.
 2. Déployer / Redeploy sur Vercel.
-3. Vérifier que l'accueil affiche `V4.3.1`.
+3. Vérifier que l'accueil affiche `V4.3.2`.
 4. Tester d'abord avec une vidéo courte, puis avec une vidéo longue.
 
 ## Test de reprise d'upload
@@ -33,3 +33,7 @@ Kiz Memory efface l'état local de cette session et demande de sélectionner à 
 ## Vercel Hobby
 
 `vercel.json` utilise `maxDuration: 300` pour `api/prepare.js` et `api/render.js`, afin de rester dans la limite du plan Hobby avec Fluid Compute. Ne montez pas cette valeur au-dessus de 300 sur le plan gratuit.
+
+
+### V4.3.2
+Aucun réglage payant n’est requis. Si `SANDBOX_SNAPSHOT_ID` existe mais est ancien, vous pouvez le supprimer ; la V4.3.2 sait aussi retomber automatiquement sur un Sandbox propre.

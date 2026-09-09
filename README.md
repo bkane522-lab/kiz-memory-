@@ -1,6 +1,6 @@
-# Kiz Memory V4.3.1 — Vidéos longues
+# Kiz Memory V4.3.2 — Vidéos longues
 
-V4.3.1 est une version de stabilisation. Elle ne change ni le design principal ni le moteur de sélection IA : elle réduit surtout les transferts et le travail serveur inutiles sur les vidéos longues.
+V4.3.2 est une version de stabilisation. Elle ne change ni le design principal ni le moteur de sélection IA : elle réduit surtout les transferts et le travail serveur inutiles sur les vidéos longues.
 
 ## Ce qui change
 
@@ -14,7 +14,7 @@ V4.3.1 est une version de stabilisation. Elle ne change ni le design principal n
 - L'upload reste direct téléphone → Vercel Blob privé. Le fichier vidéo ne transite pas dans une fonction serverless.
 - Authentification : OIDC du projet Vercel ; aucun `BLOB_READ_WRITE_TOKEN` permanent n'est requis.
 
-> Limite du Web : si Android supprime complètement le fichier sélectionné ou si la session multipart Vercel a expiré, l'utilisateur doit sélectionner de nouveau la vidéo et une nouvelle session peut être nécessaire. V4.3.1 ne prétend pas garantir une reprise après n'importe quelle fermeture du système.
+> Limite du Web : si Android supprime complètement le fichier sélectionné ou si la session multipart Vercel a expiré, l'utilisateur doit sélectionner de nouveau la vidéo et une nouvelle session peut être nécessaire. V4.3.2 ne prétend pas garantir une reprise après n'importe quelle fermeture du système.
 
 ### 2. Préparation FFmpeg en une seule passe
 
@@ -45,13 +45,13 @@ La sortie reste MP4 H.264/AAC, 1080 × 1920.
 
 ### 4. Nettoyage
 
-Les anciennes routes expérimentales `api/client-upload.js` et `api/getkip` ne font pas partie du ZIP V4.3.1.
+Les anciennes routes expérimentales `api/client-upload.js` et `api/getkip` ne font pas partie du ZIP V4.3.2.
 
 ## Mode gratuit
 
 La limite produit reste fixée à **900 Mo par vidéo** afin de conserver une marge sous le stockage Blob Hobby de 1 Go pendant les tests. Les fichiers temporaires sont supprimés autant que possible après traitement.
 
-Cette limite est un choix de Kiz Memory V4.3.1 pour le mode gratuit, pas une promesse qu'une vidéo de 900 Mo passera dans toutes les conditions réseau ou tous les téléphones.
+Cette limite est un choix de Kiz Memory V4.3.2 pour le mode gratuit, pas une promesse qu'une vidéo de 900 Mo passera dans toutes les conditions réseau ou tous les téléphones.
 
 ## Ce qui ne change pas
 
@@ -65,4 +65,13 @@ Cette limite est un choix de Kiz Memory V4.3.1 pour le mode gratuit, pas une pro
 
 ## Limite de calcul Hobby
 
-V4.3.1 configure `prepare` et `render` à 300 secondes, qui est le maximum actuel des Vercel Functions Hobby avec Fluid Compute. Le pipeline a été réduit pour rester autant que possible sous cette limite, mais une vidéo extrêmement longue ou difficile à transcoder peut encore dépasser 5 minutes de traitement serveur. Dans ce cas, Kiz Memory doit signaler l'échec plutôt que promettre un traitement illimité.
+V4.3.2 configure `prepare` et `render` à 300 secondes, qui est le maximum actuel des Vercel Functions Hobby avec Fluid Compute. Le pipeline a été réduit pour rester autant que possible sous cette limite, mais une vidéo extrêmement longue ou difficile à transcoder peut encore dépasser 5 minutes de traitement serveur. Dans ce cas, Kiz Memory doit signaler l'échec plutôt que promettre un traitement illimité.
+
+
+## Correctif V4.3.2 — démarrage Sandbox
+
+- FFmpeg est recherché d’abord dans le Sandbox.
+- S’il manque, installation via le gestionnaire système Ubuntu (`apt-get`) au lieu de télécharger une archive tierce.
+- Un `SANDBOX_SNAPSHOT_ID` expiré n’empêche plus le traitement : Kiz Memory retente automatiquement avec un Sandbox propre.
+- `@vercel/sandbox` passe à 3.2.2.
+- 2 vCPU sont utilisés pour limiter la consommation du quota Hobby.

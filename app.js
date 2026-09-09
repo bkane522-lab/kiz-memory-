@@ -1,6 +1,5 @@
-const APP_VERSION = "4.2.6";
+const APP_VERSION = "4.2.7";
 const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
-const CLIENT_UPLOAD_ROUTE = "/api/client-upload";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
@@ -89,7 +88,7 @@ async function handleFileSelection(event) {
 
   if (file.size > 1024 * 1024 * 1024) {
     input.value = "";
-    toast("Pour cette V4.2.6, la taille maximale est de 1 Go.");
+    toast("Pour cette V4.2.7, la taille maximale est de 1 Go.");
     return;
   }
 
@@ -324,16 +323,6 @@ window.addEventListener("beforeunload", (event) => {
   event.returnValue = "";
 });
 
-async function getBlobClientUpload() {
-  if (!blobClientModulePromise) {
-    blobClientModulePromise = import(BLOB_CLIENT_MODULE_URL).then((module) => {
-      if (typeof module.upload !== "function") throw new Error("Module Vercel Blob client incomplet.");
-      return module.upload;
-    });
-  }
-  return blobClientModulePromise;
-}
-
 function createUploadProgressReporter(totalBytes) {
   const startedAt = performance.now();
   let lastAt = startedAt;
@@ -396,22 +385,6 @@ function formatShortDuration(seconds) {
   return `${secs} s`;
 }
 
-async function uploadMultipart(pathname, blob, onProgress) {
-  const upload = await getBlobClientUpload();
-  return upload(pathname, blob, {
-    access: "private",
-    handleUploadUrl: CLIENT_UPLOAD_ROUTE,
-    multipart: true,
-    contentType: state.sourceMime || blob.type || "application/octet-stream",
-    clientPayload: JSON.stringify({
-      version: APP_VERSION,
-      filename: state.sourceName,
-      size: blob.size
-    }),
-    onUploadProgress: (event) => onProgress(event)
-  });
-}
-
 async function createMemory() {
   if (!state.sourceBlob || state.processing) return;
   state.processing = true;
@@ -424,37 +397,16 @@ async function createMemory() {
 
   try {
     $("#uploadProgressWrap").hidden = false;
-    $("#processingText").textContent = "Transfert privé multipart — gardez Kiz Memory ouverte…";
+    $("#processingText").textContent = "Transfert privé sécurisé — gardez Kiz Memory ouverte…";
     const sourceBlob = state.sourceBlob;
     const reportUploadProgress = createUploadProgressReporter(sourceBlob.size);
 
-    // V4.2.6 : l'upload multipart est la voie principale.
-    // On ne crée plus d'URL PUT signée avant de savoir si elle est nécessaire.
-    const preferredPath = buildSourcePath(state.sourceName);
-    let uploaded;
-    try {
-      uploaded = await uploadMultipart(preferredPath, sourceBlob, reportUploadProgress);
-    } catch (multipartError) {
-      const moduleFailure = /module|import|fetch dynamically imported|failed to fetch/i.test(String(multipartError?.message || multipartError));
-      if (!moduleFailure) throw multipartError;
-
-      console.warn("Multipart client module unavailable; signed PUT fallback enabled", multipartError);
-      $("#processingText").textContent = "Mode de transfert compatible — gardez Kiz Memory ouverte…";
-      const ticket = await requestUploadUrl();
-      state.sourcePath = ticket.pathname;
-      cleanupOnFailure.add(ticket.pathname);
-      uploaded = await uploadWithProgress(sourceBlob, ticket.presignedUrl, reportUploadProgress);
-    }
-
-    if (uploaded?.pathname && isSafeBlobPath(uploaded.pathname)) {
-      cleanupOnFailure.delete(state.sourcePath);
-      state.sourcePath = uploaded.pathname;
-      cleanupOnFailure.add(state.sourcePath);
-    } else if (!state.sourcePath) {
-      // Le SDK client doit normalement renvoyer le pathname final.
-      // Ne jamais continuer vers FFmpeg avec un chemin supposé.
-      throw new Error("Le transfert est terminé mais Vercel Blob n’a pas renvoyé le chemin du fichier.");
-    }
+    // V4.2.7 : upload direct vers Blob privé avec URL PUT signée générée côté serveur via OIDC.
+    // Aucun BLOB_READ_WRITE_TOKEN permanent n'est requis.
+    const ticket = await requestUploadUrl();
+    state.sourcePath = ticket.pathname;
+    cleanupOnFailure.add(ticket.pathname);
+    await uploadWithProgress(sourceBlob, ticket.presignedUrl, reportUploadProgress);
 
     setStep("stepUploaded", true, "✓");
     $("#uploadProgressWrap").hidden = true;

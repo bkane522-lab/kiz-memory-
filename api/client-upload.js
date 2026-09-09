@@ -2,7 +2,11 @@ import { handleUpload } from '@vercel/blob/client';
 
 const MAX_BYTES = 1024 * 1024 * 1024; // 1 Go : limite produit actuelle, indépendante de la limite Blob
 const ALLOWED_TYPES = [
-  'video/*',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/3gpp',
+  'video/x-matroska',
   'application/octet-stream'
 ];
 
@@ -32,7 +36,7 @@ export default async function handler(req, res) {
           allowOverwrite: false,
           validUntil: Date.now() + 2 * 60 * 60 * 1000,
           tokenPayload: JSON.stringify({
-            version: '4.2.4',
+            version: '4.2.5',
             multipart: Boolean(multipart),
             size: payload.size || null
           })

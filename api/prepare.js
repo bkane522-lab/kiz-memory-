@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 const SOURCE_PREFIX = 'kiz-memory/source/';
 const ANALYSIS_PREFIX = 'kiz-memory/analysis/';
-const SANDBOX_TIMEOUT_MS = 285 * 1000; // sous la limite Hobby de 300 s
+const SANDBOX_TIMEOUT_MS = 295 * 1000; // garde une marge sous la limite Function Hobby de 300 s
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
       '-i', 'input-video',
       '-map', '0:v:0',
       '-an',
-      '-vf', 'scale=240:426:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=240:426:(ow-iw)/2:(oh-ih)/2:color=0x07030D,setsar=1,fps=4',
+      '-vf', 'fps=2,scale=240:426:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=240:426:(ow-iw)/2:(oh-ih)/2:color=0x07030D,setsar=1',
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
       '-crf', '35',
@@ -87,9 +87,9 @@ export default async function handler(req, res) {
       duration,
       hasAudio,
       audioTimeline,
-      proxy: { width: 240, height: 426, fps: 4, codec: 'H.264' },
+      proxy: { width: 240, height: 426, fps: 2, codec: 'H.264' },
       expiresAt: Date.now() + readTtl,
-      version: '4.4'
+      version: '4.4.1'
     });
   } catch (error) {
     console.error('Kiz Memory prepare error', error);
@@ -125,8 +125,9 @@ async function createSandbox() {
     persistent: false,
     region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
-    // V4.4 : 2 vCPU suffisent pour le proxy et limitent la consommation du quota Hobby.
-    resources: { vcpus: 2 }
+    // V4.4.1 : Hobby autorise 4 vCPU. On les utilise pour réduire fortement le temps
+    // de décodage/transcodage des vidéos longues et rester sous les 300 s de la Function.
+    resources: { vcpus: 4 }
   };
 
   const snapshotId = String(process.env.SANDBOX_SNAPSHOT_ID || '').trim();
@@ -324,6 +325,9 @@ function truncate(value, limit = 1800) {
 
 function publicError(error) {
   const text = String(error?.message || error || '');
+  if (/timeout|timed out|deadline|stopped|duration exceeded|285000|295000|300000/i.test(text)) {
+    return 'La préparation de cette vidéo a dépassé le temps disponible sur Vercel Hobby. Kiz Memory n’a pas modifié votre vidéo.';
+  }
   if (/snapshot/i.test(text)) return 'Le snapshot FFmpeg était indisponible ; Kiz Memory a essayé un Sandbox propre mais le démarrage a échoué.';
   if (/install/i.test(text)) return 'FFmpeg n’a pas pu être installé dans le Sandbox Vercel.';
   if (/sandbox|oidc|unauthor|forbidden/i.test(text)) return 'Vercel Sandbox n’a pas pu être créé pour ce traitement.';

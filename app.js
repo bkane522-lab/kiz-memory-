@@ -1,4 +1,4 @@
-const APP_VERSION = "4.4";
+const APP_VERSION = "4.4.1";
 const BLOB_CLIENT_MODULE_URL = "https://esm.sh/@vercel/blob@2.8.0/client?bundle";
 const MEDIAPIPE_VERSION = "1.0.1";
 const MEDIAPIPE_MODULE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;

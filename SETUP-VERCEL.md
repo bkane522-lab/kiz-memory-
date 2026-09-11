@@ -1,4 +1,4 @@
-# Installation Vercel — Kiz Memory V4.4
+# Installation Vercel — Kiz Memory V4.4.1
 
 ## Prérequis
 
@@ -10,9 +10,9 @@
 
 ## Déploiement
 
-1. Remplacer le contenu du projet par le contenu du ZIP V4.4.
+1. Remplacer le contenu du projet par le contenu du ZIP V4.4.1.
 2. Déployer / Redeploy sur Vercel.
-3. Vérifier que l'accueil affiche `V4.4`.
+3. Vérifier que l'accueil affiche `V4.4.1`.
 4. Tester d'abord une vidéo courte puis une vidéo longue.
 
 ## Comportement attendu
@@ -31,4 +31,4 @@ Chaque carte résultat possède ses propres boutons :
 
 ## Plan Hobby
 
-`vercel.json` conserve `maxDuration: 300` pour `api/prepare.js` et `api/render.js`. Aucun service payant supplémentaire n'est ajouté par V4.4.
+`vercel.json` conserve `maxDuration: 300` pour `api/prepare.js` et `api/render.js`. Aucun service payant supplémentaire n'est ajouté par V4.4.1.

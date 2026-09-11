@@ -46,3 +46,24 @@ La taille source reste limitée à 900 Mo pour conserver une marge sous le quota
 ## Sandbox FFmpeg
 
 V4.4.1 conserve le correctif validé de V4.3.2 : FFmpeg est d'abord recherché dans le Sandbox ; s'il manque, il est installé via le gestionnaire système. Un ancien `SANDBOX_SNAPSHOT_ID` ne bloque pas définitivement le pipeline : le code retente avec un Sandbox propre.
+
+
+## V4.4.2 — vidéos > 200 Mo
+
+- plafond source : 900 Mo ;
+- upload multipart direct vers Blob privé ;
+- proxy d’analyse à 2 fps ;
+- 4 vCPU pour préparation et rendu ;
+- la source est supprimée avant le stockage des Memories finales afin de préserver le quota Blob Hobby.
+- test local validé avec une source réelle de 225 Mo et une source concaténée de 447 Mo.
+
+
+## V4.4.3 — validation proche de 900 Mo
+
+- plafond source : 900 Mio (943 718 400 octets) ;
+- à partir de 300 Mio, analyse vidéo adaptative à 1 fps sur images-clés ;
+- FFmpeg lit le Blob privé directement : plus de copie intégrale de 900 Mo dans le Sandbox avant l'analyse ;
+- une seule passe FFmpeg produit le proxy vidéo et les mesures audio ;
+- rendu final toujours limité aux passages retenus, jamais à toute la vidéo.
+
+Validation locale effectuée avec une source H.264/AAC de 939 042 440 octets (895,54 Mio / 939,04 MB), durée 6 min 30 s : proxy d'analyse complet en environ 10,3 s sur la machine de test, puis cinq clips séparés (17/19/22/25/30 s) rendus en environ 25 s au total. Ce test valide le pipeline FFmpeg local ; les temps réels Vercel dépendent du réseau et du quota disponible.

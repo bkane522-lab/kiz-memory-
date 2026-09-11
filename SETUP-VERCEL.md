@@ -32,3 +32,17 @@ Chaque carte résultat possède ses propres boutons :
 ## Plan Hobby
 
 `vercel.json` conserve `maxDuration: 300` pour `api/prepare.js` et `api/render.js`. Aucun service payant supplémentaire n'est ajouté par V4.4.1.
+
+
+## V4.4.2 — vidéos > 200 Mo
+
+- plafond source : 900 Mo ;
+- upload multipart direct vers Blob privé ;
+- proxy d’analyse à 2 fps ;
+- 4 vCPU pour préparation et rendu ;
+- la source est supprimée avant le stockage des Memories finales afin de préserver le quota Blob Hobby.
+- test local validé avec une source réelle de 225 Mo et une source concaténée de 447 Mo.
+
+
+## V4.4.3
+Aucune nouvelle variable d'environnement. Le plafond reste 900 Mio. Pour les sources >= 300 Mio, le mode d'analyse allégé est automatique.

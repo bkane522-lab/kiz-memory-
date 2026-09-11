@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 const SOURCE_PREFIX = 'kiz-memory/source/';
 const ANALYSIS_PREFIX = 'kiz-memory/analysis/';
 const SANDBOX_TIMEOUT_MS = 295 * 1000; // garde une marge sous la limite Function Hobby de 300 s
+const LARGE_SOURCE_BYTES = 300 * 1024 * 1024;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,23 +24,22 @@ export default async function handler(req, res) {
     }
 
     const sourcePath = await resolveStoredSourcePath(requestedSourcePath);
+    const sourceMeta = await head(sourcePath, { access: 'private' });
+    const sourceBytes = Math.max(0, Number(sourceMeta?.size || 0));
+    const largeSourceMode = sourceBytes >= LARGE_SOURCE_BYTES;
+    const proxyFps = largeSourceMode ? 1 : 2;
     proxyPath = `${ANALYSIS_PREFIX}${Date.now()}-${randomUUID()}-proxy.mp4`;
-    const sourceUrl = await signedReadUrl(sourcePath, 20 * 60 * 1000);
+    const sourceUrl = await signedReadUrl(sourcePath, 60 * 60 * 1000);
 
     sandbox = await createSandbox();
     const tools = await ensureFfmpeg(sandbox);
 
-    const download = await sandbox.runCommand('curl', [
-      '-sS', '-L', '--retry', '3', '--retry-all-errors', '--connect-timeout', '30',
-      '-w', '%{http_code}', '-o', 'input-video', sourceUrl
-    ]);
-    const downloadStatus = (await download.stdout()).trim();
-    if (download.exitCode !== 0 || downloadStatus < '200' || downloadStatus >= '300') {
-      throw new Error(`Video download failed (HTTP ${downloadStatus || 'network'}): ${truncate(await download.stderr())}`);
-    }
-
-    const duration = await probeDuration(sandbox, tools.ffprobe);
-    const hasAudio = await probeAudio(sandbox, tools.ffprobe);
+    // V4.4.3 : ne copie plus 300–900 Mo dans le Sandbox avant de travailler.
+    // FFprobe et FFmpeg lisent directement le Blob privé signé. Le stockage et
+    // le décodage peuvent donc avancer en flux, sans double transfert préalable.
+    const media = await probeMedia(sandbox, tools.ffprobe, sourceUrl);
+    const duration = media.duration;
+    const hasAudio = media.hasAudio;
 
     // V4.3 : UNE seule invocation FFmpeg traite la source.
     // - sortie 1 : proxy vidéo H.264 très léger pour mouvement + MediaPipe ;
@@ -47,11 +47,18 @@ export default async function handler(req, res) {
     //   toutes les 0,5 s dans un minuscule fichier texte.
     // Il n'y a plus de WAV PCM ni de second transcodage audio.
     const args = [
-      '-hide_banner', '-loglevel', 'error', '-y',
-      '-i', 'input-video',
+      '-hide_banner', '-loglevel', 'error', '-y'
+    ];
+
+    // Pour les très gros fichiers, décoder uniquement les images-clés est
+    // suffisant pour repérer des fenêtres de 15–30 s et réduit radicalement
+    // le coût CPU. L'audio continue d'être analysé sur toute la durée.
+    if (largeSourceMode) args.push('-skip_frame', 'nokey');
+    args.push(
+      '-i', sourceUrl,
       '-map', '0:v:0',
       '-an',
-      '-vf', 'fps=2,scale=240:426:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=240:426:(ow-iw)/2:(oh-ih)/2:color=0x07030D,setsar=1',
+      '-vf', `fps=${proxyFps},scale=240:426:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=240:426:(ow-iw)/2:(oh-ih)/2:color=0x07030D,setsar=1`,
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
       '-crf', '35',
@@ -61,7 +68,7 @@ export default async function handler(req, res) {
       '-movflags', '+faststart',
       '-max_muxing_queue_size', '1024',
       'analysis-proxy.mp4'
-    ];
+    );
 
     if (hasAudio) {
       args.push(
@@ -87,9 +94,10 @@ export default async function handler(req, res) {
       duration,
       hasAudio,
       audioTimeline,
-      proxy: { width: 240, height: 426, fps: 2, codec: 'H.264' },
+      proxy: { width: 240, height: 426, fps: proxyFps, codec: 'H.264', mode: largeSourceMode ? 'large-keyframes' : 'standard' },
+      sourceBytes,
       expiresAt: Date.now() + readTtl,
-      version: '4.4.1'
+      version: '4.4.3'
     });
   } catch (error) {
     console.error('Kiz Memory prepare error', error);
@@ -198,21 +206,26 @@ async function detectFfmpeg(sandbox) {
   return { ffmpeg: lines[0], ffprobe: lines[1] };
 }
 
-async function probeDuration(sandbox, ffprobe) {
+async function probeMedia(sandbox, ffprobe, sourceUrl) {
   const probe = await sandbox.runCommand(ffprobe, [
-    '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', 'input-video'
+    '-v', 'error',
+    '-show_entries', 'format=duration:stream=codec_type',
+    '-of', 'json',
+    sourceUrl
   ]);
-  if (probe.exitCode !== 0) throw new Error('FFprobe duration failed.');
-  const value = Number((await probe.stdout()).trim());
-  if (!Number.isFinite(value) || value <= 0) throw new Error('Durée vidéo invalide.');
-  return Math.round(value * 1000) / 1000;
-}
-
-async function probeAudio(sandbox, ffprobe) {
-  const probe = await sandbox.runCommand(ffprobe, [
-    '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index', '-of', 'csv=p=0', 'input-video'
-  ]);
-  return probe.exitCode === 0 && Boolean((await probe.stdout()).trim());
+  if (probe.exitCode !== 0) {
+    throw new Error(`FFprobe media failed: ${truncate(await probe.stderr())}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse((await probe.stdout()).trim() || '{}');
+  } catch {
+    throw new Error('FFprobe media returned invalid JSON.');
+  }
+  const duration = Number(parsed?.format?.duration);
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error('Durée vidéo invalide.');
+  const hasAudio = Array.isArray(parsed?.streams) && parsed.streams.some((stream) => stream?.codec_type === 'audio');
+  return { duration: Math.round(duration * 1000) / 1000, hasAudio };
 }
 
 async function readAudioTimeline(sandbox, duration) {

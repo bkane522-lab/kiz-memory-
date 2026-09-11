@@ -2,7 +2,7 @@ import { issueSignedToken } from '@vercel/blob';
 import { handleUploadPresigned } from '@vercel/blob/client';
 
 const SOURCE_PREFIX = 'kiz-memory/source/';
-const MAX_BYTES = 1024 * 1024 * 1024;
+const MAX_BYTES = 900 * 1024 * 1024; // même plafond que l’application
 const ALLOWED_TYPES = [
   'video/*',
   'application/octet-stream'

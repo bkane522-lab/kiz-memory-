@@ -113,7 +113,7 @@ export default async function handler(req, res) {
       analysisMode,
       renderStrategy: 'separate-selected-clips',
       expiresAt: Date.now() + resultTtl,
-      version: '4.4'
+      version: '4.4.3'
     });
   } catch (error) {
     console.error('Kiz Memory render error', error);
@@ -153,7 +153,7 @@ async function createSandbox() {
     persistent: false,
     region: 'cdg1',
     timeout: SANDBOX_TIMEOUT_MS,
-    resources: { vcpus: 2 }
+    resources: { vcpus: 4 }
   };
   const snapshotId = String(process.env.SANDBOX_SNAPSHOT_ID || '').trim();
   if (snapshotId) {
